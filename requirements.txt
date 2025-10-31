@@ -1,0 +1,55 @@
+# ======================================
+# Navertrafic - 네이버 쇼핑 순위 테스트 자동화
+# ======================================
+
+# 모바일 자동화
+Appium-Python-Client>=3.1.0
+selenium>=4.15.0  # CDP 사용 시
+
+# ADB 제어 (Pure Python ADB 래퍼)
+pure-python-adb>=0.3.0.dev0
+adb-shell>=0.4.4
+
+# 데이터 처리 및 분석
+pandas>=2.1.0
+numpy>=1.24.0
+
+# 시각화
+matplotlib>=3.8.0
+seaborn>=0.13.0
+plotly>=5.18.0  # 인터랙티브 차트
+
+# 환경 변수 관리
+python-dotenv>=1.0.0
+
+# 로깅
+loguru>=0.7.2
+
+# HTTP 요청 (순위 체크용)
+requests>=2.31.0
+httpx>=0.25.0  # 비동기 HTTP 클라이언트
+
+# HTML 파싱 (순위 크롤링)
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+
+# 유틸리티
+pytz>=2023.3  # 타임존 처리
+python-dateutil>=2.8.2
+
+# 통계 분석
+scipy>=1.11.0
+statsmodels>=0.14.0
+
+# 데이터 저장
+# SQLite는 Python 내장 모듈이므로 별도 설치 불필요
+
+# 개발/테스트 도구 (선택적)
+pytest>=7.4.0
+pytest-cov>=4.1.0
+black>=23.11.0  # 코드 포맷터
+flake8>=6.1.0  # 린터
+mypy>=1.7.0  # 타입 체커
+
+# 성능 모니터링 (선택적)
+psutil>=5.9.0  # CPU, 메모리, 배터리 모니터링

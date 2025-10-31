@@ -1,0 +1,260 @@
+{
+  "test_products": [
+    {
+      "id": "product_001",
+      "product_url": "https://shopping.naver.com/window-products/12345678",
+      "product_name": "테스트 상품 1",
+      "category": "전자기기",
+      "search_keyword": "무선 이어폰",
+      "competitor_urls": [
+        "https://shopping.naver.com/window-products/11111111",
+        "https://shopping.naver.com/window-products/22222222"
+      ]
+    },
+    {
+      "id": "product_002",
+      "product_url": "https://shopping.naver.com/window-products/87654321",
+      "product_name": "테스트 상품 2",
+      "category": "패션의류",
+      "search_keyword": "겨울 패딩",
+      "competitor_urls": [
+        "https://shopping.naver.com/window-products/33333333",
+        "https://shopping.naver.com/window-products/44444444"
+      ]
+    }
+  ],
+
+  "test_scenarios": {
+    "SCENARIO_1": {
+      "name": "네이버 검색 → 쇼핑탭",
+      "description": "가장 기본적인 유입 경로",
+      "method": "http",
+      "entry_path": "search",
+      "use_login_cookies": false,
+      "category_adaptive": true,
+      "weight": 0.3
+    },
+    "SCENARIO_2": {
+      "name": "카테고리 탐색",
+      "description": "카테고리에서 탐색 후 발견",
+      "method": "http",
+      "entry_path": "category",
+      "use_login_cookies": false,
+      "category_adaptive": true,
+      "weight": 0.15
+    },
+    "SCENARIO_3": {
+      "name": "블로그 리뷰 유입",
+      "description": "블로그 리뷰를 보고 방문",
+      "method": "http",
+      "entry_path": "blog",
+      "use_login_cookies": false,
+      "category_adaptive": true,
+      "weight": 0.15
+    },
+    "SCENARIO_4": {
+      "name": "가격비교 사이트 유입",
+      "description": "다나와 등에서 유입",
+      "method": "http",
+      "entry_path": "price_compare",
+      "use_login_cookies": false,
+      "category_adaptive": true,
+      "weight": 0.1
+    },
+    "SCENARIO_5": {
+      "name": "CASE_S3 비교쇼핑 (ADB)",
+      "description": "실제 기기로 비교쇼핑 패턴",
+      "method": "adb",
+      "scenario_type": "case_s3",
+      "use_login_cookies": false,
+      "weight": 0.15
+    },
+    "SCENARIO_6": {
+      "name": "로그인 상태 검색 (HTTP)",
+      "description": "로그인 쿠키 사용",
+      "method": "http",
+      "entry_path": "search",
+      "use_login_cookies": true,
+      "category_adaptive": true,
+      "weight": 0.15
+    }
+  },
+
+  "entry_paths": {
+    "search": {
+      "name": "네이버 통합검색",
+      "referer_template": "https://search.naver.com/search.naver?query={keyword}",
+      "utm_source": "naver",
+      "utm_medium": "organic"
+    },
+    "shopping": {
+      "name": "네이버쇼핑 직접 검색",
+      "referer_template": "https://search.shopping.naver.com/search/all?query={keyword}",
+      "utm_source": "shopping",
+      "utm_medium": "direct"
+    },
+    "category": {
+      "name": "카테고리 탐색",
+      "referer_template": "https://shopping.naver.com/category/{category_id}",
+      "utm_source": "shopping",
+      "utm_medium": "category"
+    },
+    "ranking": {
+      "name": "랭킹/베스트",
+      "referer_template": "https://shopping.naver.com/best/home",
+      "utm_source": "shopping",
+      "utm_medium": "ranking"
+    },
+    "deal": {
+      "name": "특가/타임딜",
+      "referer_template": "https://shopping.naver.com/deal/index.nhn",
+      "utm_source": "shopping",
+      "utm_medium": "deal"
+    },
+    "blog": {
+      "name": "블로그 리뷰",
+      "referer_template": "https://blog.naver.com/{blog_id}/{post_id}",
+      "utm_source": "blog",
+      "utm_medium": "review",
+      "utm_campaign": "organic_review"
+    },
+    "cafe": {
+      "name": "카페 추천",
+      "referer_template": "https://cafe.naver.com/{cafe_id}/{article_id}",
+      "utm_source": "cafe",
+      "utm_medium": "recommendation"
+    },
+    "google": {
+      "name": "구글 검색",
+      "referer_template": "https://www.google.com/search?q={keyword}",
+      "utm_source": "google",
+      "utm_medium": "organic"
+    },
+    "price_compare": {
+      "name": "가격비교 사이트",
+      "referer_template": "https://www.danawa.com",
+      "utm_source": "danawa",
+      "utm_medium": "price_comparison"
+    }
+  },
+
+  "category_patterns": {
+    "전자기기": {
+      "typical_keywords": ["무선이어폰", "블루투스스피커", "스마트워치", "보조배터리"],
+      "dwell_time_range": [120, 180],
+      "scroll_depth_range": [5, 8],
+      "compare_probability": 0.8,
+      "review_probability": 0.7,
+      "qa_probability": 0.5,
+      "cart_probability": 0.4,
+      "key_features": ["스펙 확인", "리뷰 중시", "가격 비교"]
+    },
+    "패션의류": {
+      "typical_keywords": ["겨울패딩", "청바지", "니트", "원피스"],
+      "dwell_time_range": [60, 90],
+      "scroll_depth_range": [4, 6],
+      "compare_probability": 0.6,
+      "review_probability": 0.8,
+      "qa_probability": 0.3,
+      "cart_probability": 0.5,
+      "key_features": ["이미지 중심", "사이즈 확인", "후기 중시"]
+    },
+    "식품": {
+      "typical_keywords": ["홍삼", "견과류", "다이어트식품", "건강식품"],
+      "dwell_time_range": [40, 60],
+      "scroll_depth_range": [2, 4],
+      "compare_probability": 0.4,
+      "review_probability": 0.6,
+      "qa_probability": 0.2,
+      "cart_probability": 0.6,
+      "key_features": ["빠른 결정", "재구매율 높음", "가격 중시"]
+    },
+    "뷰티": {
+      "typical_keywords": ["스킨케어", "마스크팩", "립스틱", "선크림"],
+      "dwell_time_range": [90, 120],
+      "scroll_depth_range": [5, 7],
+      "compare_probability": 0.7,
+      "review_probability": 0.9,
+      "qa_probability": 0.4,
+      "cart_probability": 0.5,
+      "key_features": ["성분 확인", "리뷰 필수", "사용법 확인"]
+    },
+    "생활용품": {
+      "typical_keywords": ["물티슈", "세제", "수납용품", "청소용품"],
+      "dwell_time_range": [50, 80],
+      "scroll_depth_range": [3, 5],
+      "compare_probability": 0.5,
+      "review_probability": 0.5,
+      "qa_probability": 0.3,
+      "cart_probability": 0.6,
+      "key_features": ["실용성 중심", "가성비", "배송 확인"]
+    }
+  },
+
+  "cookie_presets": {
+    "new_visitor": {
+      "description": "완전 새로운 방문자",
+      "cookies": {
+        "page_uid": "auto_generate",
+        "nx_ssl": "v2"
+      }
+    },
+    "returning_visitor": {
+      "description": "재방문자 (최근 본 상품 있음)",
+      "cookies": {
+        "page_uid": "auto_generate",
+        "nx_ssl": "v2",
+        "recent_view": "auto_generate",
+        "nid_buk": "shopping"
+      }
+    },
+    "logged_in": {
+      "description": "로그인 상태",
+      "cookies": {
+        "NID_AUT": "auto_generate",
+        "NID_SES": "auto_generate",
+        "NID_JKL": "auto_generate",
+        "nid_slevel": "1"
+      }
+    },
+    "interest_based": {
+      "description": "관심 카테고리 기록 있음",
+      "cookies": {
+        "user_interests": "auto_generate_from_category",
+        "nid_inf": "auto_generate"
+      }
+    }
+  },
+
+  "test_execution": {
+    "iterations_per_product": 100,
+    "scenario_selection": "weighted_random",
+    "ip_change_method": "airplane_mode",
+    "wait_after_traffic": 300,
+    "wait_between_iterations": 180,
+    "rank_check_interval": 10,
+    "enable_parallel": false,
+    "max_parallel_sessions": 1
+  },
+
+  "performance_comparison": {
+    "test_both_methods": true,
+    "adb_iterations": 10,
+    "http_iterations": 100,
+    "comparison_metrics": [
+      "execution_time",
+      "success_rate",
+      "rank_improvement",
+      "detection_risk"
+    ]
+  },
+
+  "notes": [
+    "카테고리별로 자동으로 행동 패턴 조정",
+    "유입 경로는 가중치 기반 랜덤 선택",
+    "쿠키는 시나리오에 따라 자동 설정",
+    "HTTP 방식이 빠르지만 탐지 위험 있음",
+    "ADB 방식이 느리지만 안전함",
+    "두 방식을 혼합 사용 권장"
+  ]
+}

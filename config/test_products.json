@@ -1,0 +1,262 @@
+{
+  "test_cases": {
+    "CASE_1": {
+      "name": "적극적 구매 의사 (High Intent)",
+      "entry_path": "naver_search",
+      "scroll_depth": "deep",
+      "action_type": "cart",
+      "dwell_time": {
+        "min": 50,
+        "max": 60
+      },
+      "description": "네이버 검색 → 쇼핑탭 → 리뷰까지 스크롤 → 장바구니 담기",
+      "hypothesis": "구매 의사가 강한 사용자 패턴 → 순위 상승 효과 높음"
+    },
+    "CASE_2": {
+      "name": "정보 탐색형 (Research)",
+      "entry_path": "naver_search",
+      "scroll_depth": "deep",
+      "action_type": "review",
+      "dwell_time": {
+        "min": 50,
+        "max": 60
+      },
+      "description": "네이버 검색 → 쇼핑탭 → 리뷰+Q&A 스크롤 → 리뷰 클릭",
+      "hypothesis": "꼼꼼히 비교하는 사용자 → 관심도 높음 신호"
+    },
+    "CASE_3": {
+      "name": "쇼핑몰 직접 방문 (Direct)",
+      "entry_path": "shopping_direct",
+      "scroll_depth": "medium",
+      "action_type": "options",
+      "dwell_time": {
+        "min": 40,
+        "max": 50
+      },
+      "description": "네이버쇼핑 직접 → 검색 → 상세정보 스크롤 → 옵션 선택",
+      "hypothesis": "쇼핑몰 직접 방문 트래픽의 가치 검증"
+    },
+    "CASE_4": {
+      "name": "빠른 비교 (Quick Compare)",
+      "entry_path": "shopping_direct",
+      "scroll_depth": "light",
+      "action_type": "browse",
+      "dwell_time": {
+        "min": 30,
+        "max": 40
+      },
+      "description": "네이버쇼핑 직접 → 검색 → 상품 기본정보만 확인",
+      "hypothesis": "짧은 체류도 효과가 있는지 확인"
+    },
+    "CASE_5": {
+      "name": "문의형 (Inquiry)",
+      "entry_path": "naver_search",
+      "scroll_depth": "medium",
+      "action_type": "qna",
+      "dwell_time": {
+        "min": 40,
+        "max": 50
+      },
+      "description": "네이버 검색 → 쇼핑탭 → 상세정보 스크롤 → 1:1 문의 클릭",
+      "hypothesis": "문의 행동의 효과 검증"
+    }
+  },
+  "products": [
+    {
+      "id": 1,
+      "product_name": "",
+      "product_id": "",
+      "product_url": "",
+      "search_keyword": "",
+      "category": "",
+      "price_range": "",
+      "initial_rank": {
+        "page": 0,
+        "position": 0,
+        "absolute_rank": 0,
+        "checked_at": ""
+      },
+      "test_case_id": "CASE_1",
+      "notes": "케이스 1: 적극적 구매 의사 - 상품 1"
+    },
+    {
+      "id": 2,
+      "product_name": "",
+      "product_id": "",
+      "product_url": "",
+      "search_keyword": "",
+      "category": "",
+      "price_range": "",
+      "initial_rank": {
+        "page": 0,
+        "position": 0,
+        "absolute_rank": 0,
+        "checked_at": ""
+      },
+      "test_case_id": "CASE_1",
+      "notes": "케이스 1: 적극적 구매 의사 - 상품 2"
+    },
+    {
+      "id": 3,
+      "product_name": "",
+      "product_id": "",
+      "product_url": "",
+      "search_keyword": "",
+      "category": "",
+      "price_range": "",
+      "initial_rank": {
+        "page": 0,
+        "position": 0,
+        "absolute_rank": 0,
+        "checked_at": ""
+      },
+      "test_case_id": "CASE_2",
+      "notes": "케이스 2: 정보 탐색형 - 상품 1"
+    },
+    {
+      "id": 4,
+      "product_name": "",
+      "product_id": "",
+      "product_url": "",
+      "search_keyword": "",
+      "category": "",
+      "price_range": "",
+      "initial_rank": {
+        "page": 0,
+        "position": 0,
+        "absolute_rank": 0,
+        "checked_at": ""
+      },
+      "test_case_id": "CASE_2",
+      "notes": "케이스 2: 정보 탐색형 - 상품 2"
+    },
+    {
+      "id": 5,
+      "product_name": "",
+      "product_id": "",
+      "product_url": "",
+      "search_keyword": "",
+      "category": "",
+      "price_range": "",
+      "initial_rank": {
+        "page": 0,
+        "position": 0,
+        "absolute_rank": 0,
+        "checked_at": ""
+      },
+      "test_case_id": "CASE_3",
+      "notes": "케이스 3: 쇼핑몰 직접 방문 - 상품 1"
+    },
+    {
+      "id": 6,
+      "product_name": "",
+      "product_id": "",
+      "product_url": "",
+      "search_keyword": "",
+      "category": "",
+      "price_range": "",
+      "initial_rank": {
+        "page": 0,
+        "position": 0,
+        "absolute_rank": 0,
+        "checked_at": ""
+      },
+      "test_case_id": "CASE_3",
+      "notes": "케이스 3: 쇼핑몰 직접 방문 - 상품 2"
+    },
+    {
+      "id": 7,
+      "product_name": "",
+      "product_id": "",
+      "product_url": "",
+      "search_keyword": "",
+      "category": "",
+      "price_range": "",
+      "initial_rank": {
+        "page": 0,
+        "position": 0,
+        "absolute_rank": 0,
+        "checked_at": ""
+      },
+      "test_case_id": "CASE_4",
+      "notes": "케이스 4: 빠른 비교 - 상품 1"
+    },
+    {
+      "id": 8,
+      "product_name": "",
+      "product_id": "",
+      "product_url": "",
+      "search_keyword": "",
+      "category": "",
+      "price_range": "",
+      "initial_rank": {
+        "page": 0,
+        "position": 0,
+        "absolute_rank": 0,
+        "checked_at": ""
+      },
+      "test_case_id": "CASE_4",
+      "notes": "케이스 4: 빠른 비교 - 상품 2"
+    },
+    {
+      "id": 9,
+      "product_name": "",
+      "product_id": "",
+      "product_url": "",
+      "search_keyword": "",
+      "category": "",
+      "price_range": "",
+      "initial_rank": {
+        "page": 0,
+        "position": 0,
+        "absolute_rank": 0,
+        "checked_at": ""
+      },
+      "test_case_id": "CASE_5",
+      "notes": "케이스 5: 문의형 - 상품 1"
+    },
+    {
+      "id": 10,
+      "product_name": "",
+      "product_id": "",
+      "product_url": "",
+      "search_keyword": "",
+      "category": "",
+      "price_range": "",
+      "initial_rank": {
+        "page": 0,
+        "position": 0,
+        "absolute_rank": 0,
+        "checked_at": ""
+      },
+      "test_case_id": "CASE_5",
+      "notes": "케이스 5: 문의형 - 상품 2"
+    }
+  ],
+  "metadata": {
+    "version": "2.0",
+    "created_at": "2025-11-01",
+    "last_updated": "",
+    "total_products": 10,
+    "total_test_cases": 5,
+    "products_per_case": 2,
+    "test_iterations": 100,
+    "description": "각 테스트 케이스별로 트래픽 패턴을 다르게 생성하여 효과성 비교"
+  },
+  "selection_guide": {
+    "principles": [
+      "동일 카테고리 회피: 같은 케이스에 유사 카테고리 상품 배치 금지",
+      "초기 순위 유사: 각 케이스별 상품들의 초기 순위 범위 비슷하게",
+      "키워드 경쟁도 분산: 고경쟁/저경쟁 키워드 골고루 배치"
+    ],
+    "recommended_categories": [
+      "전자기기 (이어폰, 마우스, 키보드 등)",
+      "생활용품 (텀블러, 우산, 가방 등)",
+      "패션잡화 (시계, 지갑, 벨트 등)",
+      "뷰티 (마스크팩, 립스틱, 크림 등)",
+      "식품 (건강식품, 간식, 차 등)"
+    ],
+    "initial_rank_target": "50-100위 사이 (너무 높거나 낮지 않게)",
+    "keyword_competition": "중간~낮은 경쟁도 키워드 선호"
+  }
+}

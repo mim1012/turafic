@@ -1,0 +1,81 @@
+{
+  "test_product": {
+    "id": "12345678",
+    "product_name": "테스트 상품 예시",
+    "product_url": "https://shopping.naver.com/window-products/12345678",
+    "search_keyword": "무선 이어폰",
+    "category": "전자기기",
+    "competitor_urls": [
+      "https://shopping.naver.com/window-products/11111111",
+      "https://shopping.naver.com/window-products/22222222"
+    ]
+  },
+  "screen": {
+    "width": 1080,
+    "height": 2400,
+    "comment": "기기별로 다를 수 있음 - adb shell wm size로 확인"
+  },
+  "coordinates": {
+    "search_box": {
+      "x": 540,
+      "y": 200,
+      "description": "네이버 검색창"
+    },
+    "shopping_tab": {
+      "x": 400,
+      "y": 350,
+      "description": "쇼핑 탭"
+    },
+    "product_item": {
+      "x": 540,
+      "y": 800,
+      "description": "첫 번째 상품 위치 (대략적)"
+    },
+    "cart_button": {
+      "x": 540,
+      "y": 2100,
+      "description": "장바구니 담기 버튼"
+    },
+    "back_button": {
+      "x": 60,
+      "y": 150,
+      "description": "뒤로가기 버튼"
+    },
+    "scroll_start": {
+      "x": 540,
+      "y": 1600,
+      "description": "스크롤 시작점"
+    },
+    "scroll_end": {
+      "x": 540,
+      "y": 800,
+      "description": "스크롤 끝점"
+    }
+  },
+  "timing": {
+    "page_load_wait": 3.0,
+    "scroll_duration": 300,
+    "wait_after_scroll": 1.0,
+    "competitor_dwell_min": 25,
+    "competitor_dwell_max": 35,
+    "target_dwell_min": 90,
+    "target_dwell_max": 120,
+    "network_wait_timeout": 30
+  },
+  "case_s3_config": {
+    "description": "비교 쇼핑 후 최종 선택 시나리오",
+    "competitor_count": 2,
+    "competitor_scroll_count_min": 2,
+    "competitor_scroll_count_max": 3,
+    "target_scroll_count_min": 4,
+    "target_scroll_count_max": 6,
+    "show_interest_probability": 0.4,
+    "add_to_cart_probability": 0.7
+  },
+  "notes": [
+    "좌표값은 기기의 화면 해상도에 따라 조정 필요",
+    "개발자 옵션 → 포인터 위치 ON으로 좌표 확인 가능",
+    "상품 URL과 경쟁사 URL은 실제 테스트 상품으로 변경 필요",
+    "첫 실행 전 좌표 검증 필수"
+  ]
+}
