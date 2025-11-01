@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import uvicorn
 
-from server.api import bot_management, task_assignment, admin, campaign_management, ranking_group_api
+from server.api import bot_management, task_assignment, admin, campaign_management, ranking_group_api, product_management
 from server.core.database import init_db, close_db
 from server.core.cache import init_cache, close_cache
 
@@ -51,6 +51,7 @@ app.include_router(bot_management.router, prefix="/api/v1/bots", tags=["Bot Mana
 app.include_router(task_assignment.router, prefix="/api/v1/tasks", tags=["Task Assignment"])
 app.include_router(campaign_management.router, prefix="/api/v1/campaigns", tags=["Campaign Management"])
 app.include_router(ranking_group_api.router, prefix="/api/v1/ranking-groups", tags=["Ranking Groups"])
+app.include_router(product_management.router, prefix="/api/v1", tags=["Product Management"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin Dashboard"])
 
 @app.get("/")
