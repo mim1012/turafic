@@ -738,34 +738,167 @@ identity_profiles = [
 
 ### 2. IP 로테이션 (핫스팟 기반)
 
-**대장 봇**:
-```java
-// Per Traffic 전략
-public void changeIpPerTraffic() {
-    toggleAirplaneMode();  // 비행기 모드 토글
-    Thread.sleep(5000);  // 5초 대기
-    notifySubordinates();  // 쫄병들에게 IP 변경 완료 신호
-}
+#### IP 변경 주기: **5분**
 
-// Per Session 전략
-public void changeIpPerSession() {
-    if (isNewSession()) {
-        toggleAirplaneMode();
+**실제 트래픽 로그 분석 결과**:
+- 대장 봇이 **5분마다** 비행기 모드 토글 → IP 변경
+- 쫄병 봇들은 대장 핫스팟에 연결되어 **자동으로 IP 변경**
+- 관찰된 IP 범위: `175.223.x.x`, `110.70.x.x`, `39.7.x.x`, `211.246.x.x`
+
+#### 대장 봇 구현
+
+```java
+public class LeaderBotService extends Service {
+    private static final int IP_CHANGE_INTERVAL = 5 * 60 * 1000; // 5분
+    private Handler handler = new Handler();
+    
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        startIPRotation();
+    }
+    
+    private void startIPRotation() {
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                changeIP();
+                handler.postDelayed(this, IP_CHANGE_INTERVAL);
+            }
+        }, IP_CHANGE_INTERVAL);
+    }
+    
+    private void changeIP() {
+        try {
+            // 방법 1: 비행기 모드 토글 (권장)
+            toggleAirplaneMode();
+            
+            // 또는 방법 2: 모바일 데이터 토글
+            // toggleMobileData();
+            
+            Log.d("LeaderBot", "IP changed successfully");
+        } catch (Exception e) {
+            Log.e("LeaderBot", "Failed to change IP", e);
+        }
+    }
+    
+    private void toggleAirplaneMode() throws Exception {
+        // Root 권한으로 비행기 모드 켜기
+        executeRootCommand("settings put global airplane_mode_on 1");
+        executeRootCommand("am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true");
+        
+        // 3초 대기
+        Thread.sleep(3000);
+        
+        // Root 권한으로 비행기 모드 끄기
+        executeRootCommand("settings put global airplane_mode_on 0");
+        executeRootCommand("am broadcast -a android.intent.action.AIRPLANE_MODE --ez state false");
+        
+        // IP 재할당 대기 (5초)
         Thread.sleep(5000);
-        notifySubordinates();
+    }
+    
+    private void toggleMobileData() throws Exception {
+        // Root 권한으로 모바일 데이터 끄기
+        executeRootCommand("svc data disable");
+        Thread.sleep(3000);
+        
+        // Root 권한으로 모바일 데이터 켜기
+        executeRootCommand("svc data enable");
+        Thread.sleep(5000);
+    }
+    
+    private void executeRootCommand(String command) throws Exception {
+        Process process = Runtime.getRuntime().exec("su");
+        DataOutputStream os = new DataOutputStream(process.getOutputStream());
+        os.writeBytes(command + "\n");
+        os.writeBytes("exit\n");
+        os.flush();
+        process.waitFor();
     }
 }
 ```
 
-**쫄병 봇**:
+#### 쫄병 봇 구현
+
 ```java
-// 대장의 IP 변경 완료 신호 대기
-public void waitForLeaderIpChange() {
-    while (!leaderIpChanged) {
-        Thread.sleep(100);
+public class FollowerBotService extends Service {
+    private String leaderHotspotSSID = "Leader_Hotspot";
+    private String currentIP = "";
+    
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        connectToLeaderHotspot();
+        monitorIPChange();
     }
-    // IP 변경 완료, 작업 계속
+    
+    private void connectToLeaderHotspot() {
+        // 대장 봇의 핫스팟에 연결
+        WifiManager wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE);
+        
+        WifiConfiguration config = new WifiConfiguration();
+        config.SSID = "\"" + leaderHotspotSSID + "\"";
+        config.preSharedKey = "\"password\"";
+        
+        int netId = wifiManager.addNetwork(config);
+        wifiManager.enableNetwork(netId, true);
+        
+        Log.d("FollowerBot", "Connected to leader hotspot");
+    }
+    
+    private void monitorIPChange() {
+        currentIP = getCurrentIP();
+        
+        new Thread(() -> {
+            while (true) {
+                try {
+                    Thread.sleep(10000); // 10초마다 체크
+                    
+                    String newIP = getCurrentIP();
+                    if (!newIP.equals(currentIP)) {
+                        Log.d("FollowerBot", "IP changed: " + currentIP + " -> " + newIP);
+                        currentIP = newIP;
+                    }
+                } catch (InterruptedException e) {
+                    break;
+                }
+            }
+        }).start();
+    }
+    
+    private String getCurrentIP() {
+        try {
+            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                for (InetAddress addr : Collections.list(ni.getInetAddresses())) {
+                    if (!addr.isLoopbackAddress() && addr instanceof Inet4Address) {
+                        return addr.getHostAddress();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e("FollowerBot", "Failed to get IP", e);
+        }
+        return "Unknown";
+    }
 }
+```
+
+#### IP 변경 시나리오 (5분 주기)
+
+```
+그룹 1 (대장 Bot-1 + 쫄병 Bot-2, Bot-3, Bot-4):
+  00:00 → IP: 175.223.19.211
+  00:05 → IP: 110.70.54.172   (5분 후)
+  00:10 → IP: 39.7.54.15      (5분 후)
+  00:15 → IP: 175.223.26.144  (5분 후)
+  00:20 → IP: 110.70.47.241   (5분 후)
+  ...
+
+예상 IP 로테이션:
+- 100회 트래픽 ÷ 5분 = 약 20회 IP 변경
+- 18개 봇 × 20회 = 약 360개 고유 IP
+- 탐지 회피: 매우 높음
 ```
 
 ### 3. 행동 패턴 무작위화
