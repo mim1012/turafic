@@ -1,0 +1,199 @@
+"""
+Task Assignment Engine
+작업 할당 로직 - A/B 테스트 그룹 관리 및 작업 패턴 생성
+"""
+
+import json
+import random
+from typing import Dict, List
+from pathlib import Path
+
+# 테스트 매트릭스 로드 (minimal_test_matrix.json)
+TEST_MATRIX_PATH = Path(__file__).parent.parent.parent / "config" / "test_matrix.json"
+
+def load_test_matrix() -> List[Dict]:
+    """
+    테스트 매트릭스 로드
+    
+    Returns:
+        테스트 케이스 리스트 (9개 조합)
+    """
+    if TEST_MATRIX_PATH.exists():
+        with open(TEST_MATRIX_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data.get("test_cases", [])
+    
+    # 파일이 없으면 기본 매트릭스 반환
+    return [
+        {"id": 1, "engagement_level": "low", "fingerprint": "profile_a"},
+        {"id": 2, "engagement_level": "low", "fingerprint": "profile_b"},
+        {"id": 3, "engagement_level": "low", "fingerprint": "profile_c"},
+        {"id": 4, "engagement_level": "medium", "fingerprint": "profile_a"},
+        {"id": 5, "engagement_level": "medium", "fingerprint": "profile_b"},
+        {"id": 6, "engagement_level": "medium", "fingerprint": "profile_c"},
+        {"id": 7, "engagement_level": "high", "fingerprint": "profile_a"},
+        {"id": 8, "engagement_level": "high", "fingerprint": "profile_b"},
+        {"id": 9, "engagement_level": "high", "fingerprint": "profile_c"},
+    ]
+
+
+def assign_group(bot_count: int) -> int:
+    """
+    봇에게 테스트 그룹 할당 (라운드 로빈 방식)
+    
+    Args:
+        bot_count: 현재까지 등록된 봇 수
+    
+    Returns:
+        그룹 번호 (1~9)
+    """
+    return (bot_count % 9) + 1
+
+
+def generate_task_pattern(
+    task_config: Dict,
+    coordinates: Dict,
+    keyword: str = "단백질쉐이크"
+) -> List[Dict]:
+    """
+    작업 패턴 생성 (JSON 형태)
+    
+    Args:
+        task_config: 테스트 케이스 설정 (engagement_level, fingerprint)
+        coordinates: UI 좌표 맵
+        keyword: 검색 키워드
+    
+    Returns:
+        JSON 작업 패턴 리스트
+    """
+    engagement_level = task_config.get("engagement_level", "medium")
+    
+    # 참여 수준에 따른 체류 시간 결정
+    if engagement_level == "low":
+        dwell_time = random.randint(15, 30)  # 15~30초
+    elif engagement_level == "medium":
+        dwell_time = random.randint(60, 90)  # 60~90초
+    else:  # high
+        dwell_time = random.randint(120, 180)  # 120~180초
+    
+    # JSON 패턴 생성
+    pattern = [
+        {
+            "action": "kill",
+            "target": "com.sec.android.app.sbrowser",
+            "description": "삼성 브라우저 강제 종료"
+        },
+        {
+            "action": "wait",
+            "duration": 2000,
+            "description": "2초 대기"
+        },
+        {
+            "action": "start",
+            "target": "com.sec.android.app.sbrowser",
+            "description": "삼성 브라우저 시작"
+        },
+        {
+            "action": "wait",
+            "duration": 3000,
+            "description": "브라우저 로딩 대기"
+        },
+        {
+            "action": "tap",
+            "x": coordinates["search_bar"]["x"],
+            "y": coordinates["search_bar"]["y"],
+            "description": "검색창 터치"
+        },
+        {
+            "action": "wait",
+            "duration": 1000
+        },
+        {
+            "action": "text",
+            "value": keyword,
+            "description": f"'{keyword}' 입력"
+        },
+        {
+            "action": "wait",
+            "duration": 2000,
+            "description": "검색 결과 로딩 대기"
+        },
+        {
+            "action": "tap",
+            "x": coordinates["product_item_1"]["x"],
+            "y": coordinates["product_item_1"]["y"],
+            "description": "첫 번째 상품 클릭"
+        },
+        {
+            "action": "wait",
+            "duration": dwell_time * 1000,  # 밀리초 단위
+            "description": f"상품 페이지 체류 ({dwell_time}초)"
+        },
+        {
+            "action": "back",
+            "description": "뒤로 가기"
+        },
+    ]
+    
+    # 높은 참여 수준일 경우 추가 행동
+    if engagement_level == "high":
+        pattern.extend([
+            {
+                "action": "scroll",
+                "direction": "down",
+                "distance": 500,
+                "description": "아래로 스크롤"
+            },
+            {
+                "action": "wait",
+                "duration": 3000
+            },
+            {
+                "action": "tap",
+                "x": coordinates["product_item_2"]["x"],
+                "y": coordinates["product_item_2"]["y"],
+                "description": "두 번째 상품 클릭"
+            },
+            {
+                "action": "wait",
+                "duration": random.randint(30, 60) * 1000,
+                "description": "추가 상품 탐색"
+            },
+            {
+                "action": "back",
+                "description": "뒤로 가기"
+            },
+        ])
+    
+    return pattern
+
+
+def add_randomness_to_pattern(pattern: List[Dict]) -> List[Dict]:
+    """
+    작업 패턴에 무작위성 추가 (탐지 회피)
+    
+    Args:
+        pattern: 원본 작업 패턴
+    
+    Returns:
+        무작위성이 추가된 작업 패턴
+    """
+    randomized_pattern = []
+    
+    for step in pattern:
+        new_step = step.copy()
+        
+        # tap 액션의 좌표에 ±10 픽셀 노이즈 추가
+        if step["action"] == "tap":
+            new_step["x"] = step["x"] + random.randint(-10, 10)
+            new_step["y"] = step["y"] + random.randint(-10, 10)
+        
+        # wait 액션의 시간에 ±20% 노이즈 추가
+        if step["action"] == "wait":
+            duration = step["duration"]
+            noise = int(duration * random.uniform(-0.2, 0.2))
+            new_step["duration"] = max(500, duration + noise)  # 최소 500ms
+        
+        randomized_pattern.append(new_step)
+    
+    return randomized_pattern
