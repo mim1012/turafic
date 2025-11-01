@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Optional, List, Dict
 import uuid
 
-from server.core.database import get_session, Bot, Task
+from server.core.database import get_session, Bot, Task, Campaign
 from server.core.cache import get_ui_coordinates
 from server.core.task_engine import load_test_matrix, generate_task_pattern, add_randomness_to_pattern
 
@@ -43,14 +43,15 @@ async def get_task(
     session: AsyncSession = Depends(get_session)
 ):
     """
-    작업 요청 - 봇 ID 기반 작업 할당
+    작업 요청 - 캠페인 기반 분산 작업 할당
     
     1. 봇 존재 여부 확인
-    2. 봇의 그룹 확인
-    3. 그룹에 맞는 테스트 케이스 로드
-    4. 봇의 해상도에 맞는 UI 좌표 조회
-    5. 작업 패턴 생성 (무작위성 추가)
-    6. 작업 ID 생성 및 저장
+    2. 실행 중인 캠페인 조회
+    3. 캠페인 목표 달성 여부 확인
+    4. 봇의 그룹에 맞는 테스트 케이스 로드
+    5. 봇의 해상도에 맞는 UI 좌표 조회
+    6. 작업 패턴 생성 (무작위성 추가)
+    7. 작업 ID 생성 및 저장, 캠페인 카운트 증가
     """
     # 봇 존재 여부 확인
     result = await session.execute(
@@ -64,6 +65,42 @@ async def get_task(
     # 봇 상태 확인
     if bot.status != "active":
         raise HTTPException(status_code=403, detail=f"Bot is {bot.status}, not active")
+    
+    # 실행 중인 캠페인 조회 (status='active')
+    campaign_result = await session.execute(
+        select(Campaign)
+        .where(Campaign.status == "active")
+        .order_by(Campaign.created_at.asc())  # 가장 먼저 시작된 캠페인
+        .limit(1)
+    )
+    campaign = campaign_result.scalar_one_or_none()
+    
+    if not campaign:
+        # 실행 중인 캠페인이 없으면 대기 명령 반환
+        return TaskResponse(
+            task_id="wait",
+            pattern=[{"action": "wait", "duration": 300000, "description": "대기 (5분)"}]
+        )
+    
+    # 캠페인 목표 달성 여부 확인 (SELECT ... FOR UPDATE로 동시성 문제 해결)
+    campaign_lock_result = await session.execute(
+        select(Campaign)
+        .where(Campaign.campaign_id == campaign.campaign_id)
+        .with_for_update()  # 행 락 획듍
+    )
+    campaign_locked = campaign_lock_result.scalar_one()
+    
+    if campaign_locked.current_traffic_count >= campaign_locked.target_traffic:
+        # 목표 달성 시 캠페인 종료
+        campaign_locked.status = "completed"
+        campaign_locked.completed_at = datetime.utcnow()
+        await session.commit()
+        
+        # 다음 캠페인 조회 (재귀 호출 대신 대기 명령)
+        return TaskResponse(
+            task_id="wait",
+            pattern=[{"action": "wait", "duration": 300000, "description": "캠페인 종료, 대기 (5분)"}]
+        )
     
     # 그룹 확인
     group = bot.group
@@ -80,8 +117,8 @@ async def get_task(
     # UI 좌표 조회
     coordinates = await get_ui_coordinates(bot.screen_resolution)
     
-    # 작업 패턴 생성
-    pattern = generate_task_pattern(task_config, coordinates)
+    # 작업 패턴 생성 (캠페인의 키워드 사용)
+    pattern = generate_task_pattern(task_config, coordinates, keyword=campaign_locked.target_keyword)
     
     # 무작위성 추가 (탐지 회피)
     pattern = add_randomness_to_pattern(pattern)
@@ -98,6 +135,10 @@ async def get_task(
     )
     
     session.add(new_task)
+    
+    # 캠페인 카운트 증가 (원자적 연산)
+    campaign_locked.current_traffic_count += 1
+    campaign_locked.total_tasks += 1
     
     # 봇 정보 업데이트
     bot.last_task_at = datetime.utcnow()

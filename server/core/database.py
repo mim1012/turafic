@@ -93,6 +93,7 @@ class Campaign(Base):
     
     # 통계
     total_tasks = Column(Integer, default=0)
+    current_traffic_count = Column(Integer, default=0)  # 현재까지 완료된 트래픽 수
     success_tasks = Column(Integer, default=0)
     fail_tasks = Column(Integer, default=0)
 
