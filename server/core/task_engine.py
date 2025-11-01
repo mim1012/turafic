@@ -57,24 +57,30 @@ def generate_task_pattern(
 ) -> List[Dict]:
     """
     작업 패턴 생성 (JSON 형태)
-    
+
+    IP 로테이션 타이밍 충돌 해결을 위한 작업 시간 제한:
+    - High: 최대 90초 (기존 120~180초에서 단축)
+    - Medium: 최대 60초 (기존 60~90초 유지)
+    - Low: 최대 45초 (기존 15~30초에서 증가하여 균형)
+
     Args:
         task_config: 테스트 케이스 설정 (engagement_level, fingerprint)
         coordinates: UI 좌표 맵
         keyword: 검색 키워드
-    
+
     Returns:
         JSON 작업 패턴 리스트
     """
     engagement_level = task_config.get("engagement_level", "medium")
-    
-    # 참여 수준에 따른 체류 시간 결정
+
+    # 참여 수준에 따른 체류 시간 결정 (IP 로테이션 타이밍 충돌 해결)
+    # 목표: 모든 작업을 90초 이내에 완료하여 5분 IP 변경 주기와 충돌 방지
     if engagement_level == "low":
-        dwell_time = random.randint(15, 30)  # 15~30초
+        dwell_time = random.randint(30, 45)  # 30~45초 (기존 15~30 → 증가)
     elif engagement_level == "medium":
-        dwell_time = random.randint(60, 90)  # 60~90초
+        dwell_time = random.randint(45, 60)  # 45~60초 (기존 60~90 → 단축)
     else:  # high
-        dwell_time = random.randint(120, 180)  # 120~180초
+        dwell_time = random.randint(60, 90)  # 60~90초 (기존 120~180 → 대폭 단축)
     
     # JSON 패턴 생성
     pattern = [
@@ -171,29 +177,66 @@ def generate_task_pattern(
 def add_randomness_to_pattern(pattern: List[Dict]) -> List[Dict]:
     """
     작업 패턴에 무작위성 추가 (탐지 회피)
-    
+
     Args:
         pattern: 원본 작업 패턴
-    
+
     Returns:
         무작위성이 추가된 작업 패턴
     """
     randomized_pattern = []
-    
+
     for step in pattern:
         new_step = step.copy()
-        
+
         # tap 액션의 좌표에 ±10 픽셀 노이즈 추가
         if step["action"] == "tap":
             new_step["x"] = step["x"] + random.randint(-10, 10)
             new_step["y"] = step["y"] + random.randint(-10, 10)
-        
+
         # wait 액션의 시간에 ±20% 노이즈 추가
         if step["action"] == "wait":
             duration = step["duration"]
             noise = int(duration * random.uniform(-0.2, 0.2))
             new_step["duration"] = max(500, duration + noise)  # 최소 500ms
-        
+
         randomized_pattern.append(new_step)
-    
+
     return randomized_pattern
+
+
+def calculate_pattern_duration(pattern: List[Dict]) -> int:
+    """
+    작업 패턴의 총 소요 시간 계산
+
+    Args:
+        pattern: 작업 패턴 리스트
+
+    Returns:
+        총 소요 시간 (초 단위)
+    """
+    total_ms = 0
+
+    for step in pattern:
+        if step["action"] == "wait" and "duration" in step:
+            total_ms += step["duration"]
+
+    return total_ms // 1000  # 밀리초 → 초
+
+
+def get_task_time_limits() -> Dict[str, int]:
+    """
+    참여 수준별 작업 시간 제한 반환
+
+    Returns:
+        {
+            "low": 45,
+            "medium": 60,
+            "high": 90
+        }
+    """
+    return {
+        "low": 45,      # 최대 45초
+        "medium": 60,   # 최대 60초
+        "high": 90      # 최대 90초
+    }
