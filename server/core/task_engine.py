@@ -7,6 +7,7 @@ import json
 import random
 from typing import Dict, List
 from pathlib import Path
+from server.core.coordinate_loader import load_coordinates, generate_coordinates_for_pattern
 
 # 테스트 매트릭스 로드 (minimal_test_matrix.json)
 TEST_MATRIX_PATH = Path(__file__).parent.parent.parent / "config" / "test_matrix.json"

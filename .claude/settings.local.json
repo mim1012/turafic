@@ -8,7 +8,10 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(git log:*)",
-      "Bash(git rev-parse:*)"
+      "Bash(git rev-parse:*)",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": [],
     "ask": []

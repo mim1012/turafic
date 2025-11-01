@@ -1,0 +1,32 @@
+"""
+HTTP 모드 작업 패턴 생성기 (Phase 1용)
+플랫폼별(mobile_web, pc_web, naver_app) 및 진입 경로별 패턴 생성
+"""
+
+import random
+from typing import List, Dict, Any
+
+PLATFORM_URLS = {
+    "mobile_web": {
+        "home": "https://m.naver.com",
+        "shopping_home": "https://m.shopping.naver.com",
+        "search": "https://m.search.naver.com/search.naver",
+        "shopping_search": "https://m.search.shopping.naver.com/search/all"
+    },
+    "pc_web": {
+        "home": "https://www.naver.com",
+        "shopping_home": "https://shopping.naver.com",
+        "search": "https://search.naver.com/search.naver",
+        "shopping_search": "https://search.shopping.naver.com/search/all"
+    },
+    "naver_app": {
+        "home": "naversearchapp://",
+        "shopping_home": "naversearchapp://shopping",
+        "search": "naversearchapp://search",
+        "shopping_search": "naversearchapp://shopping/search"
+    }
+}
+
+def generate_http_pattern(keyword: str, identity: Dict[str, Any], platform: str = "mobile_web", entry_path: str = "shopping_direct", engagement_level: str = "medium", click_action: str = "none") -> List[Dict[str, Any]]:
+    pattern = []
+    return pattern

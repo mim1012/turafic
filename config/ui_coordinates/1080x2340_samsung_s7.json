@@ -1,0 +1,175 @@
+{
+  "resolution": "1080x2340",
+  "device_model": "Samsung Galaxy S7",
+  "screen_density": 480,
+  "description": "네이버 쇼핑 UI 좌표 맵 (1080x2340 해상도)",
+  "last_updated": "2025-11-02",
+
+  "naver_main": {
+    "url": "https://m.naver.com",
+    "search_bar": {
+      "x": 540,
+      "y": 200,
+      "width": 1040,
+      "height": 60,
+      "description": "네이버 메인 검색창"
+    },
+    "search_button": {
+      "x": 1020,
+      "y": 200,
+      "width": 80,
+      "height": 60,
+      "description": "검색 버튼"
+    }
+  },
+
+  "naver_search_result": {
+    "url": "https://m.search.naver.com/search.naver",
+    "tab_shopping": {
+      "x": 270,
+      "y": 320,
+      "width": 120,
+      "height": 60,
+      "description": "쇼핑 탭"
+    },
+    "tab_news": {
+      "x": 135,
+      "y": 320,
+      "width": 120,
+      "height": 60,
+      "description": "뉴스 탭"
+    },
+    "tab_view": {
+      "x": 405,
+      "y": 320,
+      "width": 120,
+      "height": 60,
+      "description": "VIEW 탭"
+    }
+  },
+
+  "naver_shopping": {
+    "url": "https://m.shopping.naver.com/",
+    "product_item_1": {
+      "x": 270,
+      "y": 600,
+      "width": 520,
+      "height": 300,
+      "description": "첫 번째 상품 (좌측)"
+    },
+    "product_item_2": {
+      "x": 810,
+      "y": 600,
+      "width": 520,
+      "height": 300,
+      "description": "두 번째 상품 (우측)"
+    },
+    "product_item_3": {
+      "x": 270,
+      "y": 920,
+      "width": 520,
+      "height": 300,
+      "description": "세 번째 상품 (좌측)"
+    },
+    "product_item_4": {
+      "x": 810,
+      "y": 920,
+      "width": 520,
+      "height": 300,
+      "description": "네 번째 상품 (우측)"
+    },
+    "sort_button": {
+      "x": 960,
+      "y": 480,
+      "width": 120,
+      "height": 50,
+      "description": "정렬 버튼"
+    },
+    "filter_button": {
+      "x": 120,
+      "y": 480,
+      "width": 120,
+      "height": 50,
+      "description": "필터 버튼"
+    }
+  },
+
+  "product_detail_page": {
+    "url": "https://m.shopping.naver.com/catalog/*",
+    "scroll_targets": {
+      "options_section": {
+        "y": 800,
+        "description": "옵션 선택 영역"
+      },
+      "review_section": {
+        "y": 1500,
+        "description": "리뷰 영역"
+      },
+      "qna_section": {
+        "y": 2200,
+        "description": "Q&A 영역"
+      }
+    },
+    "add_to_cart_button": {
+      "x": 810,
+      "y": 2250,
+      "width": 480,
+      "height": 90,
+      "description": "장바구니 담기"
+    },
+    "buy_now_button": {
+      "x": 270,
+      "y": 2250,
+      "width": 480,
+      "height": 90,
+      "description": "바로 구매"
+    },
+    "review_tab": {
+      "x": 270,
+      "y": 1400,
+      "width": 200,
+      "height": 60,
+      "description": "리뷰 탭"
+    },
+    "qna_tab": {
+      "x": 540,
+      "y": 1400,
+      "width": 200,
+      "height": 60,
+      "description": "문의 탭"
+    },
+    "detail_info_tab": {
+      "x": 810,
+      "y": 1400,
+      "width": 200,
+      "height": 60,
+      "description": "상세정보 탭"
+    }
+  },
+
+  "common_controls": {
+    "back_button": {
+      "x": 60,
+      "y": 100,
+      "width": 80,
+      "height": 80,
+      "description": "뒤로 가기 버튼 (상단 좌측)"
+    },
+    "home_button": {
+      "x": 540,
+      "y": 2300,
+      "width": 100,
+      "height": 80,
+      "description": "홈 버튼 (하단 중앙)"
+    }
+  },
+
+  "scroll_config": {
+    "screen_width": 1080,
+    "screen_height": 2340,
+    "safe_start_y": 1200,
+    "safe_end_y": 800,
+    "swipe_duration": 300,
+    "description": "스크롤 안전 영역 (상단/하단 시스템 바 제외)"
+  }
+}
