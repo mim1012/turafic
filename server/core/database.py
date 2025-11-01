@@ -85,6 +85,10 @@ class Campaign(Base):
     target_traffic = Column(Integer, nullable=False)  # 목표 트래픽 수
     test_matrix_path = Column(String(255), nullable=True)  # 테스트 매트릭스 파일 경로
     
+    # 실행 모드 및 신원 프로필
+    execution_mode = Column(String(20), default="appium")  # 'appium' or 'http'
+    identity_profile_group = Column(String(50), default="samsung_mobile_default")
+    
     # 상태 관리
     status = Column(String(20), default="active")  # active, paused, completed
     created_at = Column(DateTime, default=datetime.utcnow)

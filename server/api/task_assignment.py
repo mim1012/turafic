@@ -14,6 +14,9 @@ import uuid
 from server.core.database import get_session, Bot, Task, Campaign
 from server.core.cache import get_ui_coordinates
 from server.core.task_engine import load_test_matrix, generate_task_pattern, add_randomness_to_pattern
+from server.core.identity_profiles import IdentityProfile, create_default_samsung_profiles
+from server.core.http_pattern_generator import generate_http_pattern, generate_appium_pattern
+import random
 
 router = APIRouter()
 
@@ -114,14 +117,52 @@ async def get_task(
     
     task_config = test_matrix[group - 1]  # 그룹 1 -> 인덱스 0
     
-    # UI 좌표 조회
-    coordinates = await get_ui_coordinates(bot.screen_resolution)
+    # 신원 프로필 선택
+    identity_profiles_result = await session.execute(
+        select(IdentityProfile).where(
+            IdentityProfile.group_name == campaign_locked.identity_profile_group
+        )
+    )
+    identity_profiles = identity_profiles_result.scalars().all()
     
-    # 작업 패턴 생성 (캠페인의 키워드 사용)
-    pattern = generate_task_pattern(task_config, coordinates, keyword=campaign_locked.target_keyword)
+    if not identity_profiles:
+        # 기본 프로필 생성 (첫 실행 시)
+        default_profiles = create_default_samsung_profiles()
+        session.add_all(default_profiles)
+        await session.commit()
+        identity_profiles = default_profiles
     
-    # 무작위성 추가 (탐지 회피)
-    pattern = add_randomness_to_pattern(pattern)
+    # 무작위로 프로필 선택
+    selected_profile = random.choice(identity_profiles)
+    
+    # 사용 횟수 증가
+    selected_profile.usage_count += 1
+    
+    identity_dict = {
+        "user_agent": selected_profile.user_agent,
+        "cookies": selected_profile.cookies,
+        "headers": selected_profile.headers,
+        "fingerprint": selected_profile.fingerprint
+    }
+    
+    # 실행 모드에 따른 작업 패턴 생성
+    if campaign_locked.execution_mode == "http":
+        pattern = generate_http_pattern(
+            keyword=campaign_locked.target_keyword,
+            identity=identity_dict,
+            engagement_level="medium"  # 추후 캠페인 설정에서 가져오기
+        )
+    else:  # appium 모드
+        # UI 좌표 맵 조회
+        coordinates = await get_ui_coordinates(bot.screen_resolution)
+        pattern = generate_appium_pattern(
+            keyword=campaign_locked.target_keyword,
+            identity=identity_dict,
+            ui_coordinates=coordinates,
+            engagement_level="medium"
+        )
+        # 무작위성 추가 (Appium 모드만)
+        pattern = add_randomness_to_pattern(pattern)
     
     # 작업 ID 생성 및 저장
     task_id = str(uuid.uuid4())
