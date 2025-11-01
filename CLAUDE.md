@@ -437,9 +437,19 @@ public class TaskExecutor {
 ```java
 public class RootController {
     // Root 권한으로 UI 제어 (ADB 불필요)
+    // 좌표는 서버에서 JSON 패턴으로 전달받음
     
     public void tap(int x, int y) {
-        executeRootCommand("input tap " + x + " " + y);
+        try {
+            Process process = Runtime.getRuntime().exec("su");
+            DataOutputStream os = new DataOutputStream(process.getOutputStream());
+            os.writeBytes("input tap " + x + " " + y + "\n");
+            os.writeBytes("exit\n");
+            os.flush();
+            process.waitFor();
+        } catch (Exception e) {
+            Log.e("RootController", "Failed to tap", e);
+        }
     }
     
     public void inputText(String text) {
