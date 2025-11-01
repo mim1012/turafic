@@ -1,0 +1,396 @@
+# Turafic Project - Cursor AI Rules
+
+## 프로젝트 개요
+C&C 서버 기반 분산 봇 네트워크를 통해 네이버 쇼핑 트래픽 생성 및 순위 변동을 분석하는 시스템입니다.
+
+## 핵심 아키텍처
+- **서버**: FastAPI (Python 3.10+) on Railway
+- **데이터베이스**: PostgreSQL (Railway)
+- **Android 봇**: Java/Kotlin, Android 7.0+ (API 24), Root 필수
+- **작업 할당**: "1봇 = 1캠페인 전담" 모델
+- **IP 전략**: 대장-쫄병 그룹 구조 (핫스팟 기반)
+- **테스트 설계**: L18 직교배열 (7차원 변수)
+
+## 코딩 스타일 및 규칙
+
+### Python (서버)
+1. **타입 힌팅 필수**: 모든 함수에 타입 힌팅 사용
+2. **Docstring**: Google 스타일 docstring 사용
+3. **비동기**: FastAPI 엔드포인트는 `async def` 사용
+4. **에러 핸들링**: try-except로 모든 외부 요청 감싸기
+5. **로깅**: `src/utils/logger.py`의 `log` 객체 사용
+6. **환경 변수**: `config/settings.py`에서 중앙 관리
+
+**예시**:
+```python
+from typing import Optional, List
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from src.utils.logger import log
+
+router = APIRouter()
+
+@router.get("/api/v1/bots/{bot_id}")
+async def get_bot(
+    bot_id: str,
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    봇 정보 조회
+    
+    Args:
+        bot_id: 봇 ID
+        db: 데이터베이스 세션
+    
+    Returns:
+        봇 정보 딕셔너리
+    
+    Raises:
+        HTTPException: 봇을 찾을 수 없는 경우
+    """
+    try:
+        bot = db.query(Bot).filter(Bot.bot_id == bot_id).first()
+        if not bot:
+            raise HTTPException(status_code=404, detail="Bot not found")
+        return bot.to_dict()
+    except Exception as e:
+        log.error(f"Failed to get bot {bot_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+```
+
+### Java/Kotlin (Android)
+1. **패키지 구조**: `com.turafic.bot.{module}`
+2. **네이밍**: camelCase (변수/메서드), PascalCase (클래스)
+3. **Root 명령어**: `su -c "명령어"` 형식 사용
+4. **에러 핸들링**: try-catch로 모든 Root 명령어 감싸기
+5. **로깅**: `Log.d(TAG, message)` 사용
+
+**예시**:
+```java
+public class RootController {
+    private static final String TAG = "RootController";
+    
+    public boolean executeRootCommand(String command) {
+        try {
+            Process process = Runtime.getRuntime().exec("su");
+            DataOutputStream os = new DataOutputStream(process.getOutputStream());
+            os.writeBytes(command + "\n");
+            os.writeBytes("exit\n");
+            os.flush();
+            
+            int exitCode = process.waitFor();
+            Log.d(TAG, "Command executed: " + command + ", exit code: " + exitCode);
+            return exitCode == 0;
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to execute root command: " + command, e);
+            return false;
+        }
+    }
+}
+```
+
+## 데이터베이스 규칙
+
+### 테이블 네이밍
+- 복수형 사용: `bots`, `campaigns`, `tasks`, `rankings`
+- snake_case 사용: `rank_checker_bots`, `traffic_bots`
+
+### 필드 네이밍
+- snake_case 사용: `bot_id`, `campaign_id`, `assigned_products`
+- 타임스탬프: `created_at`, `updated_at`, `last_heartbeat`
+- 상태: `status` (VARCHAR(20), 'active', 'inactive', 'pending' 등)
+
+### 외래 키
+- `{테이블명}_id` 형식: `bot_id`, `campaign_id`, `leader_bot_id`
+
+**예시**:
+```sql
+CREATE TABLE bots (
+    bot_id VARCHAR(36) PRIMARY KEY,
+    bot_type VARCHAR(20) NOT NULL,  -- 'traffic' or 'rank_checker'
+    is_leader BOOLEAN DEFAULT FALSE,
+    leader_bot_id VARCHAR(36),
+    group_id INTEGER,
+    assigned_campaign_id VARCHAR(36),
+    assigned_products TEXT,  -- JSON 배열
+    status VARCHAR(20) DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT NOW(),
+    last_heartbeat TIMESTAMP
+);
+```
+
+## API 설계 규칙
+
+### 엔드포인트 네이밍
+- RESTful 규칙 준수
+- 복수형 사용: `/api/v1/bots`, `/api/v1/campaigns`
+- 동사 사용 금지: `/api/v1/bots/register` (X) → `/api/v1/bots` POST (O)
+
+### HTTP 메서드
+- `GET`: 조회
+- `POST`: 생성
+- `PUT`: 전체 수정
+- `PATCH`: 부분 수정
+- `DELETE`: 삭제
+
+### 응답 형식
+```python
+# 성공
+{
+    "data": {...},
+    "message": "Success"
+}
+
+# 실패
+{
+    "detail": "Error message"
+}
+```
+
+## 봇 관련 규칙
+
+### 트래픽 작업 봇
+- **그룹 구조**: 대장 1 + 쫄병 2~3
+- **대장 봇**: `is_leader=True`, 핫스팟 제공, 비행기 모드 토글
+- **쫄병 봇**: `is_leader=False`, `leader_bot_id` 설정, 핫스팟 연결
+- **작업 할당**: "1봇 = 1캠페인 전담" (100회 반복)
+
+### 순위 체크 봇
+- **그룹 구조**: 대장 1 + 쫄병 3 (총 4개)
+- **작업 분배**: 18개 제품 ÷ 4개 봇 = 4~5개/봇
+- **병렬 처리**: 4개 봇이 동시에 순위 체크
+
+## 보안 및 탐지 회피
+
+### IP 전략
+- **대장 봇**: 1시간마다 비행기 모드 토글 → IP 변경
+- **쫄병 봇**: 대장 핫스팟 연결 → 자동 IP 변경
+- **Per Traffic**: 1회 트래픽마다 IP 변경 (선택)
+- **Per Session**: 1회 세션마다 IP 변경 (권장)
+
+### User-Agent 전략
+- **Real Device**: 실제 기기 User-Agent
+- **Randomized**: 무작위 User-Agent
+- **Fixed**: 고정 User-Agent
+
+### 쿠키 전략
+- **Fresh**: 매번 새 쿠키
+- **Persistent**: 쿠키 유지
+- **Partial**: 일부 쿠키만 유지
+
+## 테스트 규칙
+
+### 단위 테스트
+- `pytest` 사용
+- 테스트 파일: `tests/test_{모듈명}.py`
+- 테스트 함수: `test_{기능명}`
+- Mock 사용: `unittest.mock` 또는 `pytest-mock`
+
+**예시**:
+```python
+import pytest
+from unittest.mock import Mock, patch
+
+def test_봇_등록_성공():
+    """봇 등록이 성공하는 경우"""
+    # Given
+    bot_data = {
+        "bot_id": "test-bot-1",
+        "bot_type": "traffic",
+        "android_id": "abc123"
+    }
+    
+    # When
+    response = client.post("/api/v1/bots", json=bot_data)
+    
+    # Then
+    assert response.status_code == 200
+    assert response.json()["bot_id"] == "test-bot-1"
+```
+
+### 통합 테스트
+- 실제 네이버 쇼핑 요청은 `@pytest.mark.integration` 마커 사용
+- CI/CD에서 제외 가능
+
+## 파일 구조 규칙
+
+### 서버 (`server/`)
+```
+server/
+├── api/
+│   ├── traffic_bot.py       # 트래픽 봇 API
+│   ├── rank_checker.py      # 순위 체크 봇 API
+│   ├── campaign.py          # 캠페인 API
+│   └── admin.py             # 관리자 API
+├── core/
+│   ├── database.py          # DB 모델 및 연결
+│   └── task_engine.py       # 작업 할당 엔진
+├── config/
+│   └── settings.py          # 환경 변수 설정
+└── main.py                  # FastAPI 앱
+```
+
+### Android (`android_agent/`)
+```
+android_agent/
+└── app/src/main/java/com/turafic/bot/
+    ├── BotService.java          # 백그라운드 서비스
+    ├── TaskExecutor.java        # JSON 패턴 실행
+    ├── RootController.java      # Root UI 제어
+    ├── ApiClient.java           # HTTP API 클라이언트
+    └── HotspotManager.java      # 핫스팟 제어
+```
+
+## Git 커밋 규칙
+
+### 커밋 메시지 형식
+```
+<type>: <subject>
+
+<body>
+```
+
+### Type
+- `feat`: 새 기능
+- `fix`: 버그 수정
+- `docs`: 문서 수정
+- `refactor`: 리팩토링
+- `test`: 테스트 추가/수정
+- `chore`: 빌드, 설정 파일 수정
+
+**예시**:
+```
+feat: Add rank checker bot leader-follower structure
+
+- Change rank checker bot from 1 to 4 bots
+- Implement hotspot-based IP strategy
+- Add product distribution algorithm
+```
+
+## 문서화 규칙
+
+### README.md
+- 프로젝트 개요
+- 설치 방법
+- 실행 방법
+- API 문서 링크
+
+### CLAUDE.md
+- 전체 시스템 아키텍처
+- 작업 프로세스
+- 테스트 시나리오
+- 배포 가이드
+
+### API 문서
+- FastAPI 자동 생성 문서 활용 (`/docs`)
+- Docstring에 상세 설명 작성
+
+## 환경 변수 규칙
+
+### 필수 환경 변수
+```bash
+# 데이터베이스
+DATABASE_URL=postgresql://user:password@host:port/dbname
+
+# 서버
+PORT=8000
+HOST=0.0.0.0
+
+# 네이버 쇼핑
+NAVER_SHOPPING_URL=https://shopping.naver.com
+
+# Redis (선택)
+REDIS_URL=redis://host:port
+```
+
+### 환경 변수 로드
+```python
+from pydantic_settings import BaseSettings
+
+class Settings(BaseSettings):
+    DATABASE_URL: str
+    PORT: int = 8000
+    HOST: str = "0.0.0.0"
+    
+    class Config:
+        env_file = ".env"
+
+config = Settings()
+```
+
+## 성능 최적화 규칙
+
+### 데이터베이스
+- 인덱스 추가: `bot_id`, `campaign_id`, `product_id`
+- 커넥션 풀 사용: SQLAlchemy `pool_size=10`
+
+### API
+- 캐싱: Redis 사용 (UI 좌표 맵)
+- 페이지네이션: 대량 데이터 조회 시 필수
+
+### Android
+- 백그라운드 서비스: `ForegroundService` 사용
+- 배터리 최적화 제외: 설정 가이드 제공
+
+## 에러 핸들링 규칙
+
+### 서버
+```python
+try:
+    # 비즈니스 로직
+except HTTPException:
+    raise  # FastAPI가 처리
+except Exception as e:
+    log.error(f"Unexpected error: {e}")
+    raise HTTPException(status_code=500, detail="Internal server error")
+```
+
+### Android
+```java
+try {
+    // Root 명령어 실행
+} catch (IOException e) {
+    Log.e(TAG, "IO error", e);
+    return false;
+} catch (InterruptedException e) {
+    Log.e(TAG, "Interrupted", e);
+    Thread.currentThread().interrupt();
+    return false;
+}
+```
+
+## 로깅 규칙
+
+### 로그 레벨
+- `DEBUG`: 디버깅 정보
+- `INFO`: 일반 정보 (봇 등록, 작업 할당)
+- `WARNING`: 경고 (재시도, 일시적 오류)
+- `ERROR`: 에러 (작업 실패, DB 오류)
+
+### 로그 형식
+```python
+log.info(f"Bot {bot_id} registered successfully")
+log.warning(f"Bot {bot_id} heartbeat timeout, marking as inactive")
+log.error(f"Failed to assign task to bot {bot_id}: {error}")
+```
+
+## 주의사항
+
+### 보안
+- API 키, 비밀번호는 환경 변수로 관리
+- `.env` 파일은 `.gitignore`에 추가
+- Root 권한 남용 금지
+
+### 네이버 쇼핑
+- 요청 간 대기 시간 준수 (1~3초)
+- User-Agent 무작위화
+- IP 로테이션 활용
+
+### 테스트
+- 실제 네이버 쇼핑 요청은 최소화
+- Mock 데이터 활용
+- 통합 테스트는 수동 실행
+
+---
+
+**이 규칙을 준수하여 일관성 있고 유지보수 가능한 코드를 작성하세요.**
