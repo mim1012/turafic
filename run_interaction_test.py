@@ -24,25 +24,26 @@ log = get_logger()
 class InteractionTestRunner:
     """상호작용 효과 측정 테스트 실행기"""
 
-    # 부분 요인 설계 매트릭스 (12개 조합)
+    # 단순화된 테스트 매트릭스 (카테고리 제거)
+    # 브라우저 지문 × 행동 패턴 = 12개 조합
     TEST_MATRIX = [
-        # Profile A
-        {"tc": "IT-001", "profile": "A", "behavior": "빠른이탈", "category": "전자기기"},
-        {"tc": "IT-002", "profile": "A", "behavior": "일반둘러보기", "category": "패션의류"},
-        {"tc": "IT-003", "profile": "A", "behavior": "심층탐색", "category": "식품"},
-        {"tc": "IT-004", "profile": "A", "behavior": "비교쇼핑", "category": "뷰티"},
+        # Profile A (일반 사용자)
+        {"tc": "IT-001", "profile": "A", "behavior": "빠른이탈"},
+        {"tc": "IT-002", "profile": "A", "behavior": "일반둘러보기"},
+        {"tc": "IT-003", "profile": "A", "behavior": "심층탐색"},
+        {"tc": "IT-004", "profile": "A", "behavior": "비교쇼핑"},
 
-        # Profile B
-        {"tc": "IT-005", "profile": "B", "behavior": "빠른이탈", "category": "패션의류"},
-        {"tc": "IT-006", "profile": "B", "behavior": "일반둘러보기", "category": "전자기기"},
-        {"tc": "IT-007", "profile": "B", "behavior": "심층탐색", "category": "뷰티"},
-        {"tc": "IT-008", "profile": "B", "behavior": "비교쇼핑", "category": "식품"},
+        # Profile B (고사양 사용자)
+        {"tc": "IT-005", "profile": "B", "behavior": "빠른이탈"},
+        {"tc": "IT-006", "profile": "B", "behavior": "일반둘러보기"},
+        {"tc": "IT-007", "profile": "B", "behavior": "심층탐색"},
+        {"tc": "IT-008", "profile": "B", "behavior": "비교쇼핑"},
 
-        # Profile C
-        {"tc": "IT-009", "profile": "C", "behavior": "빠른이탈", "category": "식품"},
-        {"tc": "IT-010", "profile": "C", "behavior": "일반둘러보기", "category": "뷰티"},
-        {"tc": "IT-011", "profile": "C", "behavior": "심층탐색", "category": "전자기기"},
-        {"tc": "IT-012", "profile": "C", "behavior": "비교쇼핑", "category": "패션의류"},
+        # Profile C (모바일 사용자)
+        {"tc": "IT-009", "profile": "C", "behavior": "빠른이탈"},
+        {"tc": "IT-010", "profile": "C", "behavior": "일반둘러보기"},
+        {"tc": "IT-011", "profile": "C", "behavior": "심층탐색"},
+        {"tc": "IT-012", "profile": "C", "behavior": "비교쇼핑"},
     ]
 
     def __init__(self, iterations_per_case: int = 100):
@@ -60,13 +61,11 @@ class InteractionTestRunner:
         tc_id = test_case["tc"]
         profile_name = test_case["profile"]
         behavior_name = test_case["behavior"]
-        category = test_case["category"]
 
         log.info(f"\n{'='*80}")
         log.info(f"테스트 케이스: {tc_id}")
         log.info(f"  브라우저 지문: Profile {profile_name}")
         log.info(f"  행동 패턴: {behavior_name}")
-        log.info(f"  카테고리: {category}")
         log.info(f"  반복 횟수: {self.iterations_per_case}회")
         log.info(f"{'='*80}\n")
 
@@ -87,6 +86,10 @@ class InteractionTestRunner:
 
         # HTTP 트래픽 생성기 초기화
         traffic_gen = HTTPTrafficGenerator()
+
+        # ADB 컨트롤러 초기화 (비행기모드 IP 변경용)
+        from src.automation.mobile import ADBController
+        adb = ADBController()
 
         # 초기 순위 체크
         product_id = self._extract_product_id(product["product_url"])
@@ -116,23 +119,33 @@ class InteractionTestRunner:
             )
             before_rank_value = before_rank["absolute_rank"] if before_rank else None
 
-            # 트래픽 생성 (지문 + 행동 패턴 적용)
+            # 트래픽 생성 (지문 + 행동 패턴 적용, 카테고리 제거)
             success = traffic_gen.generate_traffic(
                 product=product,
                 custom_headers=headers,
-                behavior_type=behavior_type,
-                category=category
+                behavior_type=behavior_type
             )
 
             if not success:
                 log.warning(f"[{i}] 트래픽 생성 실패")
                 continue
 
-            # IP 변경 시뮬레이션 (헤더 변경)
-            import time
-            time.sleep(random.uniform(2, 5))
+            # IP 변경: 비행기모드 토글 (실제 물리적 IP 변경)
+            log.info(f"[{i}] IP 변경 중 (비행기모드 토글)...")
+            if adb.toggle_airplane_mode(duration=3):
+                # 네트워크 재연결 대기
+                if adb.wait_for_network(timeout=30):
+                    new_ip = adb.get_ip_address()
+                    log.success(f"[{i}] IP 변경 완료: {new_ip}")
+                else:
+                    log.warning(f"[{i}] 네트워크 재연결 타임아웃")
+            else:
+                log.warning(f"[{i}] 비행기모드 토글 실패")
 
-            # After 순위
+            # After 순위 (IP 변경 후 체크)
+            import time
+            time.sleep(random.uniform(2, 5))  # 안정화 대기
+
             after_rank = self.rank_checker.check_product_rank(
                 keyword=product["search_keyword"],
                 product_id=product_id,
@@ -145,8 +158,8 @@ class InteractionTestRunner:
                 rank_change = after_rank_value - before_rank_value
                 rank_changes.append(rank_change)
 
-            # 다음 반복 간격 (짧게: 5-10초)
-            time.sleep(random.uniform(5, 10))
+            # 다음 반복 간격 (짧게: 3-7초)
+            time.sleep(random.uniform(3, 7))
 
         # 통계 계산
         import numpy as np
@@ -177,7 +190,6 @@ class InteractionTestRunner:
             "test_case_id": tc_id,
             "profile": profile_name,
             "behavior": behavior_name,
-            "category": category,
             "iterations": self.iterations_per_case,
             "statistics": {
                 "mean_rank_change": mean_change,
@@ -304,19 +316,6 @@ class InteractionTestRunner:
         for behavior, changes in behaviors.items():
             mean = np.mean(changes)
             log.info(f"  {behavior}: {mean:.2f}위 (n={len(changes)})")
-
-        # Category별 평균
-        categories = {}
-        for tc in self.results["test_cases"]:
-            category = tc["category"]
-            if category not in categories:
-                categories[category] = []
-            categories[category].append(tc["statistics"]["mean_rank_change"])
-
-        log.info("\n📊 카테고리별 평균:")
-        for category, changes in categories.items():
-            mean = np.mean(changes)
-            log.info(f"  {category}: {mean:.2f}위 (n={len(changes)})")
 
         log.info("\n" + "="*100 + "\n")
 
