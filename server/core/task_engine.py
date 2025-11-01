@@ -54,7 +54,8 @@ def assign_group(bot_count: int) -> int:
 def generate_task_pattern(
     task_config: Dict,
     coordinates: Dict,
-    keyword: str = "단백질쉐이크"
+    keyword: str = "단백질쉐이크",
+    naver_product_id: str = None
 ) -> List[Dict]:
     """
     작업 패턴 생성 (JSON 형태)
@@ -68,6 +69,7 @@ def generate_task_pattern(
         task_config: 테스트 케이스 설정 (engagement_level, fingerprint)
         coordinates: UI 좌표 맵
         keyword: 검색 키워드
+        naver_product_id: 네이버 상품 ID (특정 상품 클릭용, 선택사항)
 
     Returns:
         JSON 작업 패턴 리스트
@@ -124,13 +126,34 @@ def generate_task_pattern(
             "action": "wait",
             "duration": 2000,
             "description": "검색 결과 로딩 대기"
-        },
-        {
+        }
+    ]
+
+    # 상품 클릭 로직 (naver_product_id가 있으면 특정 상품 찾기)
+    if naver_product_id:
+        pattern.extend([
+            {
+                "action": "find_product_by_id",
+                "naver_product_id": naver_product_id,
+                "max_scroll_attempts": 10,
+                "description": f"상품 ID {naver_product_id} 찾기"
+            },
+            {
+                "action": "tap_found_product",
+                "description": "찾은 상품 클릭"
+            }
+        ])
+    else:
+        # 기존 방식 (첫 번째 상품 클릭 - 하위 호환성)
+        pattern.append({
             "action": "tap",
             "x": coordinates["product_item_1"]["x"],
             "y": coordinates["product_item_1"]["y"],
             "description": "첫 번째 상품 클릭"
-        },
+        })
+
+    # 상품 페이지 체류 및 종료
+    pattern.extend([
         {
             "action": "wait",
             "duration": dwell_time * 1000,  # 밀리초 단위

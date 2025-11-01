@@ -7,8 +7,10 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from datetime import datetime, timedelta
+from typing import Optional, List
 
 from server.core.database import get_session, Bot, Task, Campaign
+from server.core.rank_check_scheduler import manual_rank_check, schedule_rank_checks_once
 
 router = APIRouter()
 
@@ -190,5 +192,139 @@ async def get_recent_activity(
                 "completed_at": task.completed_at.isoformat() if task.completed_at else None
             }
             for task in recent_tasks
+        ]
+    }
+
+
+# ==================== Rank Check 관련 엔드포인트 ====================
+
+@router.post("/rank_check/trigger")
+async def trigger_rank_check(
+    product_ids: Optional[List[str]] = None,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    수동 순위 체크 트리거
+
+    Args:
+        product_ids: 체크할 상품 ID 리스트 (None이면 모든 active 상품)
+
+    Returns:
+        {"total_products": N, "assigned_tasks": M}
+
+    Example:
+        POST /api/v1/admin/rank_check/trigger
+        {
+            "product_ids": ["prod-1", "prod-2"]  // Optional
+        }
+    """
+    result = await manual_rank_check(product_ids)
+
+    return {
+        "message": "Rank check tasks assigned",
+        "total_products": result["total_products"],
+        "assigned_tasks": result["assigned_tasks"],
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@router.get("/rank_check/status")
+async def get_rank_check_status(session: AsyncSession = Depends(get_session)):
+    """
+    순위 체크 스케줄러 상태 조회
+
+    Returns:
+        - rank_checker 봇 수
+        - active 상품 수
+        - 최근 순위 체크 작업 통계
+    """
+    # Rank Checker 봇 수
+    rank_checker_bots = await session.execute(
+        select(func.count(Bot.bot_id)).where(
+            Bot.role == "rank_checker",
+            Bot.status == "active"
+        )
+    )
+    total_rank_checkers = rank_checker_bots.scalar()
+
+    # Active 상품 수
+    active_products = await session.execute(
+        select(func.count(func.distinct(Campaign.product_id))).where(
+            Campaign.status.in_(["completed", "active"])
+        )
+    )
+    total_products = active_products.scalar()
+
+    # 최근 24시간 순위 체크 작업 통계
+    one_day_ago = datetime.utcnow() - timedelta(hours=24)
+    recent_rank_checks = await session.execute(
+        select(func.count(Task.task_id)).where(
+            Task.created_at >= one_day_ago,
+            Task.pattern.contains([{"action": "report_ranking"}])
+        )
+    )
+    recent_checks = recent_rank_checks.scalar()
+
+    return {
+        "scheduler_status": "active",  # TODO: 실제 스케줄러 상태 확인
+        "rank_checker_bots": {
+            "total": total_rank_checkers,
+            "available": total_rank_checkers  # TODO: 실제 가용 봇 수 확인
+        },
+        "products": {
+            "total_to_check": total_products
+        },
+        "recent_activity": {
+            "checks_last_24h": recent_checks,
+            "checks_per_hour": round(recent_checks / 24, 2) if recent_checks > 0 else 0
+        },
+        "next_scheduled_check": "Every 6 hours",  # TODO: 실제 다음 스케줄 시간
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+
+@router.get("/rank_check/history")
+async def get_rank_check_history(
+    product_id: Optional[str] = None,
+    limit: int = 50,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    순위 체크 이력 조회
+
+    Args:
+        product_id: 특정 상품 ID (Optional)
+        limit: 최대 결과 수
+
+    Returns:
+        순위 체크 작업 이력
+    """
+    # TODO: 실제 구현 시 ranking_history 테이블 생성 필요
+    # 현재는 Task 테이블에서 report_ranking 액션이 포함된 작업 조회
+
+    query = select(Task).where(
+        Task.pattern.contains([{"action": "report_ranking"}])
+    ).order_by(Task.created_at.desc()).limit(limit)
+
+    if product_id:
+        # product_id로 필터링 (pattern 내부에서 검색)
+        # SQLAlchemy JSON 검색 사용
+        pass  # TODO: JSON 필터링 구현
+
+    result = await session.execute(query)
+    tasks = result.scalars().all()
+
+    return {
+        "total": len(tasks),
+        "history": [
+            {
+                "task_id": task.task_id,
+                "bot_id": task.bot_id,
+                "status": task.status,
+                "created_at": task.created_at.isoformat(),
+                "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+                "pattern": task.pattern  # Full pattern including product_id
+            }
+            for task in tasks
         ]
     }

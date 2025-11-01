@@ -22,7 +22,8 @@ class CampaignCreate(BaseModel):
     description: Optional[str] = None
     target_keyword: str
     target_traffic: int  # 목표 트래픽 수 (예: 100)
-    product_id: Optional[str] = None  # 연동할 상품 ID
+    product_id: str  # 필수: 연동할 상품 ID
+    test_case: str  # 필수: 테스트 케이스 ID (예: "TC#001")
 
 
 class CampaignResponse(BaseModel):
@@ -33,8 +34,10 @@ class CampaignResponse(BaseModel):
     target_traffic: int
     current_traffic_count: int
     status: str
-    product_id: Optional[str] = None  # 연동된 상품 ID
+    product_id: str  # 필수: 연동된 상품 ID
     product_name: Optional[str] = None  # 상품명 (조인 조회 시)
+    naver_product_id: Optional[str] = None  # 네이버 상품 ID
+    test_case: Optional[str] = None  # 테스트 케이스 ID
     created_at: str
     completed_at: Optional[str]
 
@@ -47,35 +50,36 @@ async def create_campaign(
     session: AsyncSession = Depends(get_session)
 ):
     """
-    캠페인 생성 (상품 연동 가능)
+    캠페인 생성 (상품 연동 필수)
 
-    예시 1 - 기존 상품 연동:
+    예시:
     {
-        "name": "프로틴 쉐이크 초코 100회 트래픽",
-        "target_keyword": "프로틴 쉐이크 초코",
+        "name": "프로틴 쉐이크 A - TC#001",
+        "target_keyword": "프로틴 쉐이크",
         "target_traffic": 100,
-        "product_id": "prod-uuid-1234"
+        "product_id": "prod-uuid-1234",
+        "test_case": "TC#001"
     }
 
-    예시 2 - 상품 없이 캠페인만:
-    {
-        "name": "단백질쉐이크 테스트",
-        "target_keyword": "단백질쉐이크",
-        "target_traffic": 50
-    }
+    주의: product_id와 test_case는 필수입니다.
+    각 상품은 한 번만 사용됩니다 (실험 순수성 보장).
     """
-    # Validate product_id if provided
-    product_name = None
-    if campaign.product_id:
-        from sqlalchemy import text
-        result = await session.execute(
-            text("SELECT product_name FROM products WHERE product_id = :pid AND status = 'active'"),
-            {"pid": campaign.product_id}
-        )
-        product = result.scalar_one_or_none()
-        if not product:
-            raise HTTPException(status_code=404, detail="Product not found or inactive")
-        product_name = product
+    # Validate product_id (필수)
+    if not campaign.product_id:
+        raise HTTPException(status_code=400, detail="product_id is required")
+
+    # 상품 정보 조회 (naver_product_id 포함)
+    from sqlalchemy import text
+    result = await session.execute(
+        text("SELECT product_name, naver_product_id FROM products WHERE product_id = :pid AND status = 'active'"),
+        {"pid": campaign.product_id}
+    )
+    product = result.mappings().one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found or inactive")
+
+    product_name = product["product_name"]
+    naver_product_id = product["naver_product_id"]
 
     campaign_id = str(uuid.uuid4())
 
@@ -86,6 +90,7 @@ async def create_campaign(
         target_keyword=campaign.target_keyword,
         target_traffic=campaign.target_traffic,
         product_id=campaign.product_id,
+        test_case=campaign.test_case,  # 테스트 케이스 ID 저장
         status="active",  # 생성 즉시 활성화
         created_at=datetime.utcnow(),
         started_at=datetime.utcnow()
@@ -105,6 +110,8 @@ async def create_campaign(
         status=new_campaign.status,
         product_id=new_campaign.product_id,
         product_name=product_name,
+        naver_product_id=naver_product_id,  # 네이버 상품 ID 반환
+        test_case=new_campaign.test_case,  # 테스트 케이스 ID 반환
         created_at=new_campaign.created_at.isoformat(),
         completed_at=new_campaign.completed_at.isoformat() if new_campaign.completed_at else None
     )

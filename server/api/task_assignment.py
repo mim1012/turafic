@@ -6,7 +6,7 @@ Task Assignment API
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 from datetime import datetime
 from typing import Optional, List, Dict
 import uuid
@@ -16,6 +16,7 @@ from server.core.cache import get_ui_coordinates
 from server.core.task_engine import load_test_matrix, generate_task_pattern, add_randomness_to_pattern
 from server.core.identity_profiles import IdentityProfile, create_default_samsung_profiles
 from server.core.http_pattern_generator import generate_http_pattern, generate_appium_pattern
+from server.core.role_based_task_engine import generate_leader_task, generate_follower_task
 import random
 
 router = APIRouter()
@@ -134,7 +135,18 @@ async def get_task(
         raise HTTPException(status_code=400, detail=f"Invalid group number: {group}")
     
     task_config = test_matrix[group - 1]  # 그룹 1 -> 인덱스 0
-    
+
+    # 상품 정보 조회 (naver_product_id)
+    product_result = await session.execute(
+        text("SELECT naver_product_id FROM products WHERE product_id = :pid"),
+        {"pid": campaign_locked.product_id}
+    )
+    product = product_result.mappings().one_or_none()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    naver_product_id = product["naver_product_id"]
+
     # 신원 프로필 선택
     identity_profiles_result = await session.execute(
         select(IdentityProfile).where(
@@ -163,23 +175,36 @@ async def get_task(
         "fingerprint": selected_profile.fingerprint
     }
     
-    # 실행 모드에 따른 작업 패턴 생성
-    if campaign_locked.execution_mode == "http":
-        pattern = generate_http_pattern(
+    # UI 좌표 맵 조회 (Appium 모드용)
+    coordinates = await get_ui_coordinates(bot.screen_resolution)
+
+    # 봇 역할에 따른 작업 패턴 생성
+    if bot.role == "leader":
+        # Leader: 캠페인 실행 + IP 관리
+        pattern = generate_leader_task(
+            task_config=task_config,
+            coordinates=coordinates,
             keyword=campaign_locked.target_keyword,
-            identity=identity_dict,
-            engagement_level="medium"  # 추후 캠페인 설정에서 가져오기
+            naver_product_id=naver_product_id,  # 특정 상품 클릭
+            ranking_group_id=bot.ranking_group_id
         )
-    else:  # appium 모드
-        # UI 좌표 맵 조회
-        coordinates = await get_ui_coordinates(bot.screen_resolution)
-        pattern = generate_appium_pattern(
+    elif bot.role == "follower":
+        # Follower: 캠페인 실행만
+        pattern = generate_follower_task(
+            task_config=task_config,
+            coordinates=coordinates,
             keyword=campaign_locked.target_keyword,
-            identity=identity_dict,
-            ui_coordinates=coordinates,
-            engagement_level="medium"
+            naver_product_id=naver_product_id,  # 특정 상품 클릭
+            ranking_group_id=bot.ranking_group_id
         )
-        # 무작위성 추가 (Appium 모드만)
+    else:
+        # 기본 패턴 (role 없는 경우 - 하위 호환성)
+        pattern = generate_task_pattern(
+            task_config=task_config,
+            coordinates=coordinates,
+            keyword=campaign_locked.target_keyword,
+            naver_product_id=naver_product_id  # 특정 상품 클릭
+        )
         pattern = add_randomness_to_pattern(pattern)
     
     # 작업 ID 생성 및 저장

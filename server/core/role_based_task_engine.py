@@ -12,27 +12,29 @@ def generate_leader_task(
     task_config: Dict,
     coordinates: Dict,
     keyword: str,
+    naver_product_id: str,
     ranking_group_id: str
 ) -> List[Dict]:
     """
     Leader Bot용 작업 패턴 생성
 
-    특징:
-    - 일반 트래픽 작업 수행
-    - 작업 완료 후 쫄병 완료 대기 신호 포함
-    - IP 변경 (비행기 모드 토글) 포함
+    역할:
+    1. 자신의 캠페인 트래픽 생성 (일반 봇과 동일)
+    2. 쫄병 작업 완료 대기
+    3. IP 로테이션 (비행기모드 토글)
 
     Args:
         task_config: 테스트 케이스 설정
         coordinates: UI 좌표 맵
         keyword: 검색 키워드
+        naver_product_id: 네이버 상품 ID (특정 상품 클릭용)
         ranking_group_id: 랭킹 그룹 ID
 
     Returns:
         JSON 작업 패턴 리스트
     """
-    # 기본 트래픽 작업 패턴 생성
-    pattern = generate_task_pattern(task_config, coordinates, keyword)
+    # 기본 트래픽 작업 패턴 생성 (특정 상품 클릭)
+    pattern = generate_task_pattern(task_config, coordinates, keyword, naver_product_id)
 
     # Leader 전용 추가 액션
     leader_actions = [
@@ -63,27 +65,29 @@ def generate_follower_task(
     task_config: Dict,
     coordinates: Dict,
     keyword: str,
+    naver_product_id: str,
     ranking_group_id: str
 ) -> List[Dict]:
     """
     Follower Bot용 작업 패턴 생성
 
-    특징:
-    - 일반 트래픽 작업 수행
-    - 작업 완료 후 그룹 완료 신호 전송
-    - Leader의 IP 변경 대기
+    역할:
+    1. 자신의 캠페인 트래픽 생성
+    2. 완료 신호 전송
+    3. Leader IP 변경 대기
 
     Args:
         task_config: 테스트 케이스 설정
         coordinates: UI 좌표 맵
         keyword: 검색 키워드
+        naver_product_id: 네이버 상품 ID (특정 상품 클릭용)
         ranking_group_id: 랭킹 그룹 ID
 
     Returns:
         JSON 작업 패턴 리스트
     """
-    # 기본 트래픽 작업 패턴 생성
-    pattern = generate_task_pattern(task_config, coordinates, keyword)
+    # 기본 트래픽 작업 패턴 생성 (특정 상품 클릭)
+    pattern = generate_task_pattern(task_config, coordinates, keyword, naver_product_id)
 
     # Follower 전용 추가 액션
     follower_actions = [
@@ -113,20 +117,22 @@ def generate_follower_task(
 
 def generate_rank_checker_task(
     keyword: str,
-    target_product_id: str,
+    product_id: str,
+    naver_product_id: str,
     max_pages: int = 10
 ) -> List[Dict]:
     """
     Rank Checker Bot용 작업 패턴 생성
 
-    특징:
+    역할:
     - 네이버 쇼핑 검색 실행
-    - 페이지별 상품 순위 찾기
+    - 페이지별 특정 상품(naver_product_id) 순위 찾기
     - 순위 데이터 서버 보고
 
     Args:
         keyword: 검색 키워드
-        target_product_id: 찾을 상품 ID
+        product_id: DB 상품 ID (순위 보고용)
+        naver_product_id: 네이버 상품 ID (실제 검색용)
         max_pages: 최대 검색 페이지 수 (기본 10페이지)
 
     Returns:
@@ -170,9 +176,9 @@ def generate_rank_checker_task(
         pattern.extend([
             {
                 "action": "find_product_rank",
-                "target_product_id": target_product_id,
+                "naver_product_id": naver_product_id,
                 "page": page,
-                "description": f"{page}페이지에서 상품 찾기"
+                "description": f"{page}페이지에서 상품 ID {naver_product_id} 찾기"
             },
             {
                 "action": "scroll",
@@ -191,8 +197,9 @@ def generate_rank_checker_task(
     # 순위 보고
     pattern.append({
         "action": "report_ranking",
+        "product_id": product_id,  # DB 상품 ID
+        "naver_product_id": naver_product_id,  # 네이버 상품 ID
         "keyword": keyword,
-        "target_product_id": target_product_id,
         "description": "순위 데이터 서버 보고"
     })
 
@@ -205,8 +212,9 @@ def get_task_by_role(
     task_config: Dict = None,
     coordinates: Dict = None,
     keyword: str = None,
+    naver_product_id: str = None,
     ranking_group_id: str = None,
-    target_product_id: str = None
+    product_id: str = None
 ) -> Optional[List[Dict]]:
     """
     봇 역할에 따른 작업 패턴 생성
@@ -217,26 +225,27 @@ def get_task_by_role(
         task_config: 테스트 케이스 설정 (traffic bots용)
         coordinates: UI 좌표 맵 (traffic bots용)
         keyword: 검색 키워드
+        naver_product_id: 네이버 상품 ID (특정 상품 클릭용)
         ranking_group_id: 랭킹 그룹 ID (leader/follower용)
-        target_product_id: 대상 상품 ID (rank_checker용)
+        product_id: DB 상품 ID (rank_checker용)
 
     Returns:
         JSON 작업 패턴 리스트 또는 None
     """
     if role == "leader":
-        if not all([task_config, coordinates, keyword, ranking_group_id]):
+        if not all([task_config, coordinates, keyword, naver_product_id, ranking_group_id]):
             return None
-        return generate_leader_task(task_config, coordinates, keyword, ranking_group_id)
+        return generate_leader_task(task_config, coordinates, keyword, naver_product_id, ranking_group_id)
 
     elif role == "follower":
-        if not all([task_config, coordinates, keyword, ranking_group_id]):
+        if not all([task_config, coordinates, keyword, naver_product_id, ranking_group_id]):
             return None
-        return generate_follower_task(task_config, coordinates, keyword, ranking_group_id)
+        return generate_follower_task(task_config, coordinates, keyword, naver_product_id, ranking_group_id)
 
     elif role == "rank_checker":
-        if not all([keyword, target_product_id]):
+        if not all([keyword, product_id, naver_product_id]):
             return None
-        return generate_rank_checker_task(keyword, target_product_id)
+        return generate_rank_checker_task(keyword, product_id, naver_product_id)
 
     else:
         # Unknown role
