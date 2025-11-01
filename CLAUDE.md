@@ -1,4 +1,4 @@
-# Turafic - 네이버 쇼핑 트래픽 최적화 분산 봇 네트워크
+# CLAUDE.md
 
 ## 📋 프로젝트 개요
 
@@ -6,10 +6,11 @@
 C&C 서버 기반 분산 봇 네트워크를 통해 네이버 쇼핑 상품의 트래픽 생성 및 순위 변동을 자동화하고, **과학적 실험 설계(L18 직교배열)**를 통해 어떤 사용자 행동 패턴이 상품 순위에 영향을 미치는지 분석합니다.
 
 ### 핵심 기능
-- **C&C 서버**: 수천 대의 Android 봇을 중앙에서 제어
-- **분산 봇 네트워크**: 독립적으로 동작하는 Android APK 에이전트
+- **C&C 서버**: Railway 기반 FastAPI 서버로 수십 대의 Android 봇을 중앙 제어
+- **분산 봇 네트워크**: 트래픽 작업 봇(18개) + 순위 체크 봇(1개)
 - **작업 할당 엔진**: "1봇 = 1캠페인 전담" 모델로 순수한 테스트 결과 보장
-- **L18 테스트 매트릭스**: 7차원 변수를 18개 테스트 케이스로 압축
+- **L18 테스트 매트릭스**: 7차원 변수(User-Agent, 쿠키, HTTP 헤더 등)를 18개 테스트 케이스로 압축
+- **핫스팟 기반 IP 전략**: 대장 봇(핫스팟 제공) + 쫄병 봇(핫스팟 연결) 그룹 구조
 - **안티 탐지 시스템**: Identity Profiles, IP 로테이션, 브라우저 지문 다양화
 - **실시간 모니터링**: 관리자 대시보드를 통한 봇 상태 및 캠페인 진행률 추적
 
@@ -18,15 +19,17 @@ C&C 서버 기반 분산 봇 네트워크를 통해 네이버 쇼핑 상품의 �
 서버:
 - 언어: Python 3.10+
 - 프레임워크: FastAPI
-- 데이터베이스: PostgreSQL
-- 캐시: Redis
-- 배포: Oracle Cloud (무료 티어)
+- 데이터베이스: PostgreSQL (Railway 제공)
+- 캐시: Redis (Railway 제공)
+- 배포: Railway (무료 티어, GitHub 연동, 자동 HTTPS)
 
 Android 봇:
 - 언어: Java/Kotlin
-- 제어 방식: Root (su + input tap/text) + Appium
-- 백그라운드 서비스: 24/7 실행
+- 최소 버전: Android 7.0 (API 24)
+- 제어 방식: Root (su + input tap/text)
+- 백그라운드 서비스: 24/7 실행 (ForegroundService)
 - 네트워크: HTTP API (Retrofit)
+- 핫스팟 제어: 대장 봇만 비행기 모드 토글
 
 데이터 분석:
 - Python: Pandas, Matplotlib, SciPy (ANOVA)
@@ -42,11 +45,10 @@ Android 봇:
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                    C&C 서버 (FastAPI)                        │
-│  ┌─────────────┬─────────────┬─────────────┬─────────────┐  │
-│  │ Bot Mgmt    │ Task Assign │ Admin API   │ AI Vision   │  │
-│  │ API         │ API         │             │ (자가 치유)  │  │
-│  └─────────────┴─────────────┴─────────────┴─────────────┘  │
+│                C&C 서버 (FastAPI on Railway)                 │
+│  ┌──────────────────┬──────────────────┬─────────────────┐  │
+│  │ Traffic Bot API  │ Rank Checker API │ Admin API       │  │
+│  └──────────────────┴──────────────────┴─────────────────┘  │
 │  ┌─────────────────────────────────────────────────────────┐│
 │  │         작업 할당 엔진 (Task Engine)                      ││
 │  │  - "1봇 = 1캠페인 전담" 모델                             ││
@@ -61,26 +63,41 @@ Android 봇:
 │  Bot DB         │                        │ UI 좌표 맵       │
 │  Task DB        │                        │ (캐시)          │
 │  Campaign DB    │                        └─────────────────┘
+│  Ranking DB     │
 └─────────────────┘
          │
          │ HTTP API (봇 등록, 작업 요청, 결과 보고)
          ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                       봇 네트워크 (N대)                        │
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐       ┌─────────┐  │
-│  │ 봇 #1   │  │ 봇 #2   │  │ 봇 #3   │  ...  │ 봇 #N   │  │
-│  │ (APK)   │  │ (APK)   │  │ (APK)   │       │ (APK)   │  │
-│  │ TC#1    │  │ TC#2    │  │ TC#3    │       │ TC#N    │  │
-│  └─────────┘  └─────────┘  └─────────┘       └─────────┘  │
+│                    트래픽 작업 봇 (18개)                       │
+│  ┌──────────────────┐  ┌──────────────────┐                 │
+│  │ 그룹 1 (대장+쫄병) │  │ 그룹 2 (대장+쫄병) │  ...          │
+│  │  대장 Bot-1      │  │  대장 Bot-5      │                 │
+│  │  (핫스팟 ON)     │  │  (핫스팟 ON)     │                 │
+│  │  ├─ 쫄병 Bot-2   │  │  ├─ 쫄병 Bot-6   │                 │
+│  │  ├─ 쫄병 Bot-3   │  │  └─ 쫄병 Bot-7   │                 │
+│  │  └─ 쫄병 Bot-4   │  │                  │                 │
+│  │                  │  │                  │                 │
+│  │ 역할: TC#1~18    │  │ 역할: TC#1~18    │                 │
+│  │ 전담 (100회)     │  │ 전담 (100회)     │                 │
+│  └──────────────────┘  └──────────────────┘                 │
 └─────────────────────────────────────────────────────────────┘
-         │
-         │ Root 기반 UI 제어 (su + input tap/text)
-         │ 비행기 모드 IP 변경 (1 트래픽당 1회)
-         ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    네이버 쇼핑                                │
-│              (트래픽 생성 대상 서비스)                         │
-└─────────────────────────────────────────────────────────────┘
+         │                                          │
+         │ 트래픽 생성                               │ 순위 조회
+         ▼                                          ▼
+┌──────────────────────┐              ┌──────────────────────┐
+│  순위 체크 봇 (1개)   │              │    네이버 쇼핑        │
+│  ┌────────────────┐  │              │  (트래픽 생성 대상)   │
+│  │ 독립 봇        │  │              └──────────────────────┘
+│  │ (고정 IP)      │  │
+│  │                │  │
+│  │ 역할:          │  │
+│  │ - 검색         │  │
+│  │ - 크롤링       │  │
+│  │ - 순위 계산    │  │
+│  │ - DB 저장      │  │
+│  └────────────────┘  │
+└──────────────────────┘
 ```
 
 ---
@@ -93,61 +110,115 @@ Android 봇:
 
 #### 변수 정의
 
+**트래픽량**: 모든 테스트 케이스에서 **100회로 고정** (변수 아님)
+
+**상품 정보**: 사용자가 직접 제품 ID 및 URL 제공 (카테고리 분류 불필요)
+
 | 변수 | 수준 | 설명 |
 |------|------|------|
-| **플랫폼** | PC / Mobile | 접속 기기 유형 |
-| **참여도** | High / Medium / Low | 체류 시간, 클릭 횟수 |
-| **트래픽량** | 100 / 200 / 500 | 반복 실행 횟수 |
-| **지문 다양성** | Diverse / Fixed | User-Agent, 쿠키 변경 여부 |
-| **IP 전략** | Per Traffic / Per Session | IP 변경 빈도 |
-| **진입 경로** | Naver Search / Shopping Direct | 검색 경로 |
-| **카테고리** | Electronics / Fashion / Beauty | 상품 카테고리 |
+| **플랫폼** | Mobile / PC | 접속 기기 유형 (Android APK / PC 에뮬레이터) |
+| **참여도** | High / Medium / Low | 체류 시간, 스크롤 깊이, 액션 확률 |
+| **User-Agent** | Real Device / Randomized / Fixed | User-Agent 전략 (실제 기기 / 랜덤 / 고정) |
+| **쿠키 전략** | Fresh / Persistent / Partial | 쿠키 관리 방식 (신규 / 유지 / 일부 유지) |
+| **IP 전략** | Per Traffic / Per Session | 대장 봇의 IP 변경 빈도 (핫스팟 기반) |
+| **진입 경로** | Naver Search / Shopping Direct | 검색 경로 (통합검색 / 쇼핑 직접) |
+| **HTTP 헤더** | Standard / Enhanced / Minimal | HTTP 헤더 조작 수준 |
 
-#### L18 테스트 케이스 예시
+#### 참여도 정의 (상세)
 
-```python
-test_matrix = [
-    {
-        "tc": "TC#1",
-        "platform": "mobile",
-        "engagement": "high",
-        "traffic_volume": 100,
-        "fingerprint": "diverse",
-        "ip_strategy": "per_traffic",
-        "entry_path": "naver_search",
-        "category": "electronics"
-    },
-    {
-        "tc": "TC#2",
-        "platform": "mobile",
-        "engagement": "medium",
-        "traffic_volume": 200,
-        "fingerprint": "diverse",
-        "ip_strategy": "per_session",
-        "entry_path": "shopping_direct",
-        "category": "fashion"
-    },
-    # ... TC#3 ~ TC#18
-]
+| 참여도 | 체류 시간 | 스크롤 깊이 | 액션 확률 | 설명 |
+|--------|-----------|-------------|-----------|------|
+| **High** | 60초 (±15초) | 100% (Q&A까지) | 장바구니 50%, 리뷰 40%, 문의 10% | 적극적 관심, 구매 의도 높음 |
+| **Medium** | 45초 (±10초) | 70% (리뷰까지) | 장바구니 30%, 리뷰 50%, 문의 20% | 보통 관심, 비교 검토 중 |
+| **Low** | 30초 (±8초) | 40% (옵션까지) | 장바구니 10%, 리뷰 30%, 그냥 보기 60% | 낮은 관심, 가볍게 둘러봄 |
+
+#### User-Agent 전략 상세
+
+| 전략 | 설명 | 예시 |
+|------|------|------|
+| **Real Device** | 실제 Samsung 기기 User-Agent 사용 | `Mozilla/5.0 (Linux; Android 14; SM-S928N) ...` |
+| **Randomized** | 매 트래픽마다 랜덤 User-Agent | 15개 풀에서 무작위 선택 |
+| **Fixed** | 고정 User-Agent (탐지 테스트용) | `Mozilla/5.0 (Linux; Android 10; SM-G973N) ...` |
+
+#### 쿠키 전략 상세
+
+| 전략 | 설명 | 구현 |
+|------|------|------|
+| **Fresh** | 매 트래픽마다 쿠키 삭제 (신규 사용자) | `driver.delete_all_cookies()` |
+| **Persistent** | 쿠키 유지 (재방문 사용자) | 세션 간 쿠키 공유 |
+| **Partial** | 일부 쿠키만 유지 (혼합) | 필수 쿠키만 유지, 나머지 삭제 |
+
+#### HTTP 헤더 조작 상세
+
+| 수준 | 포함 헤더 | 설명 |
+|------|----------|------|
+| **Standard** | User-Agent, Accept, Accept-Encoding | 표준 헤더만 사용 |
+| **Enhanced** | + Accept-Language, Referer, DNT, Upgrade-Insecure-Requests | 상세 헤더 추가 (실제 브라우저 모방) |
+| **Minimal** | User-Agent, Accept: */* | 최소 헤더만 사용 (탐지 테스트용) |
+
+#### IP 전략 (핫스팟 기반)
+
+| 전략 | 설명 | 구현 |
+|------|------|------|
+| **Per Traffic** | 대장 봇이 1회 트래픽마다 비행기 모드 토글 | 쫄병 봇들도 자동 IP 변경 |
+| **Per Session** | 대장 봇이 1회 세션(여러 트래픽)마다 비행기 모드 토글 | 세션 내 IP 고정 |
+
+**핫스팟 그룹 구조**:
 ```
+그룹 1:
+  대장 Bot-1 (핫스팟 ON) → 비행기 모드 토글 → IP 변경
+    ├─ 쫄병 Bot-2 (핫스팟 연결) → 자동 IP 변경
+    ├─ 쫄병 Bot-3 (핫스팟 연결) → 자동 IP 변경
+    └─ 쫄병 Bot-4 (핫스팟 연결) → 자동 IP 변경
+
+그룹 2:
+  대장 Bot-5 (핫스팟 ON) → 비행기 모드 토글 → IP 변경
+    ├─ 쫄병 Bot-6 (핫스팟 연결) → 자동 IP 변경
+    └─ 쫄병 Bot-7 (핫스팟 연결) → 자동 IP 변경
+```
+
+#### L18 테스트 케이스 전체 표
+
+| TC | 플랫폼 | 참여도 | User-Agent | 쿠키 | IP전략 | 진입경로 | HTTP헤더 |
+|----|--------|--------|------------|------|--------|----------|----------|
+| TC#1 | Mobile | High | Real Device | Fresh | Per Traffic | Naver Search | Standard |
+| TC#2 | Mobile | High | Randomized | Fresh | Per Session | Shopping Direct | Enhanced |
+| TC#3 | Mobile | High | Fixed | Persistent | Per Traffic | Shopping Direct | Minimal |
+| TC#4 | Mobile | Medium | Real Device | Persistent | Per Traffic | Shopping Direct | Enhanced |
+| TC#5 | Mobile | Medium | Randomized | Partial | Per Session | Naver Search | Minimal |
+| TC#6 | Mobile | Medium | Fixed | Fresh | Per Session | Shopping Direct | Standard |
+| TC#7 | Mobile | Low | Real Device | Partial | Per Session | Shopping Direct | Minimal |
+| TC#8 | Mobile | Low | Randomized | Fresh | Per Traffic | Shopping Direct | Standard |
+| TC#9 | Mobile | Low | Fixed | Persistent | Per Session | Naver Search | Enhanced |
+| TC#10 | PC | High | Real Device | Partial | Per Session | Naver Search | Enhanced |
+| TC#11 | PC | High | Randomized | Fresh | Per Traffic | Naver Search | Minimal |
+| TC#12 | PC | High | Fixed | Persistent | Per Session | Shopping Direct | Standard |
+| TC#13 | PC | Medium | Real Device | Fresh | Per Session | Shopping Direct | Minimal |
+| TC#14 | PC | Medium | Randomized | Persistent | Per Traffic | Shopping Direct | Standard |
+| TC#15 | PC | Medium | Fixed | Partial | Per Traffic | Naver Search | Enhanced |
+| TC#16 | PC | Low | Real Device | Fresh | Per Traffic | Shopping Direct | Standard |
+| TC#17 | PC | Low | Randomized | Partial | Per Session | Shopping Direct | Enhanced |
+| TC#18 | PC | Low | Fixed | Persistent | Per Traffic | Naver Search | Minimal |
 
 ### 2. 캠페인 정의
 
 하나의 **캠페인(Campaign)**은 다음을 의미합니다:
 
-- **1개 상품** (target_keyword)
+- **1개 상품** (사용자 제공 product_id, product_url)
 - **1개 테스트 케이스** (L18 매트릭스의 특정 행)
-- **정확히 100회 실행** (traffic_volume)
+- **정확히 100회 실행** (모든 케이스 고정)
 - **1개 봇 전담** (assigned_bot_id)
 
 ```python
 campaign = {
     "campaign_id": "uuid-1234",
-    "name": "삼성 갤럭시 - TC#1",
-    "target_keyword": "삼성 갤럭시 S24",
-    "target_traffic": 100,
+    "name": "제품A - TC#1",
+    "target_product_id": "12345678",  # 사용자 제공
+    "target_product_url": "https://shopping.naver.com/catalog/12345678",  # 사용자 제공
+    "target_keyword": "삼성 갤럭시 S24",  # 검색용
+    "target_traffic": 100,  # 고정
     "test_case": "TC#1",
-    "execution_mode": "appium",  # or "http"
+    "execution_mode": "root",  # Root 기반 UI 제어
     "identity_profile_group": "samsung_mobile_default",
     "status": "active",
     "assigned_bot_id": "bot-5678"
@@ -156,841 +227,710 @@ campaign = {
 
 ### 3. 작업 할당 모델: "1봇 = 1캠페인 전담"
 
-각 봇은 **하나의 캠페인(테스트 케이스)**에만 전담 할당되어, 해당 테스트 케이스를 100회 반복 실행합니다.
+#### 원칙
+- 각 봇은 **정확히 1개의 캠페인**만 할당받음
+- 캠페인 완료(100회) 전까지 다른 캠페인 할당 불가
+- 완료 후 10초 대기 → 새로운 캠페인 요청 가능
 
-**예시**:
+#### 예시: 9개 봇 + 18개 테스트 케이스
+
+**1차 할당**:
 - Bot-1 → TC#1 (100회 전담)
 - Bot-2 → TC#2 (100회 전담)
-- Bot-3 → TC#3 (100회 전담)
 - ...
-- Bot-18 → TC#18 (100회 전담)
+- Bot-9 → TC#9 (100회 전담)
 
-**장점**:
-- 테스트 케이스별 순수한 결과 측정 가능
-- 봇 간 경쟁 조건 없음
-- 병렬 실행으로 전체 테스트 시간 단축
+**1차 완료 후**:
+- Bot-1 → TC#10 (100회 전담)
+- Bot-2 → TC#11 (100회 전담)
+- ...
+- Bot-9 → TC#18 (100회 전담)
+
+**최종 결과**: 18개 테스트 케이스 × 100회 = 1,800회 트래픽
 
 ---
 
-## 🔄 작업 프로세스
+## 🤖 봇 타입 및 역할
 
-### 1. 봇 등록 프로세스
+### 1. 트래픽 작업 봇 (Traffic Bot)
 
+**역할**:
+- 상품 페이지 방문
+- 자연스러운 행동 시뮬레이션 (스크롤, 클릭, 체류)
+- 100회 반복 실행
+- IP 로테이션 (핫스팟 기반)
+
+**그룹 구조**:
+- **대장 봇**: 핫스팟 제공, 비행기 모드 토글로 IP 변경
+- **쫄병 봇**: 대장 핫스팟 연결, 작업 실행
+
+**데이터베이스 스키마**:
+```sql
+CREATE TABLE traffic_bots (
+    bot_id VARCHAR(36) PRIMARY KEY,
+    bot_type VARCHAR(20) DEFAULT 'traffic',
+    android_id VARCHAR(64) UNIQUE NOT NULL,
+    device_model VARCHAR(50) NOT NULL,
+    
+    -- 그룹 정보
+    is_leader BOOLEAN DEFAULT FALSE,
+    leader_bot_id VARCHAR(36),
+    group_id INTEGER,
+    
+    -- 작업 정보
+    assigned_campaign_id VARCHAR(36),
+    status VARCHAR(20) DEFAULT 'active',
+    
+    -- 통계
+    registered_at TIMESTAMP DEFAULT NOW(),
+    last_task_at TIMESTAMP,
+    success_count INTEGER DEFAULT 0,
+    fail_count INTEGER DEFAULT 0
+);
 ```
-1. Android APK 설치 및 실행
-2. 기기 정보 수집 (android_id, 모델명, 해상도 등)
-3. C&C 서버에 등록 요청 (POST /api/v1/bots/register)
-4. 서버에서 bot_id 및 그룹 할당
-5. 봇이 bot_id 저장 및 백그라운드 서비스 시작
+
+### 2. 순위 체크 봇 (Rank Checker Bot)
+
+**역할**:
+- 주기적 순위 체크 (캠페인 연동)
+- 검색 결과 크롤링
+- 순위 계산 및 DB 저장
+- 순위 변동 알림
+
+**특징**:
+- **1개 봇으로 모든 제품 순위 체크**
+- 고정 IP, 고정 User-Agent 사용 가능
+- 트래픽 작업 봇과 독립적으로 동작
+
+**데이터베이스 스키마**:
+```sql
+CREATE TABLE rank_checker_bots (
+    bot_id VARCHAR(36) PRIMARY KEY,
+    bot_type VARCHAR(20) DEFAULT 'rank_checker',
+    android_id VARCHAR(64) UNIQUE NOT NULL,
+    device_model VARCHAR(50) NOT NULL,
+    status VARCHAR(20) DEFAULT 'active',
+    last_check_at TIMESTAMP,
+    total_checks INTEGER DEFAULT 0
+);
 ```
 
-**API 요청 예시**:
+### 3. 순위 체크 주기
+
+**캠페인 연동 방식** (권장):
+
+1. **캠페인 시작 전**: Before 순위 체크
+2. **캠페인 진행 중**: 30분마다 체크 (진행률 모니터링)
+3. **캠페인 완료 후**: 30분 대기 → After 순위 체크
+
 ```python
-POST /api/v1/bots/register
-{
-    "android_id": "abc123def456",
-    "device_model": "SM-G998N",
-    "android_version": "13",
-    "screen_resolution": "1440x3200"
-}
+# 캠페인 시작 시
+1. 순위 체크 봇에게 "product_id" 순위 체크 요청
+2. Before 순위 저장
+3. 트래픽 작업 봇에게 작업 할당
 
-# 응답
-{
-    "bot_id": "uuid-bot-1234",
-    "group": 1,
-    "status": "active"
-}
-```
+# 캠페인 진행 중
+1. 30분마다 순위 체크 (진행률 모니터링)
 
-### 2. 작업 할당 프로세스
-
-```
-1. 봇이 작업 요청 (GET /api/v1/tasks/get_task?bot_id=xxx)
-2. 서버가 봇에게 캠페인 할당 (첫 요청 시)
-   - 미할당 캠페인 중 하나를 선택
-   - campaign.assigned_bot_id = bot_id 설정
-3. 서버가 JSON 작업 패턴 생성 및 반환
-4. 봇이 JSON 패턴 실행
-5. 봇이 결과 보고 (POST /api/v1/tasks/report_result)
-6. 반복 (100회 완료 시까지)
-```
-
-**작업 패턴 예시 (Appium 모드)**:
-```json
-{
-    "task_id": "task-uuid-5678",
-    "pattern": [
-        {
-            "action": "open_url",
-            "url": "https://m.naver.com",
-            "wait": 2000
-        },
-        {
-            "action": "tap",
-            "element_id": "search_box",
-            "coordinates": {"x": 540, "y": 200}
-        },
-        {
-            "action": "input_text",
-            "text": "삼성 갤럭시 S24"
-        },
-        {
-            "action": "tap",
-            "element_id": "search_button"
-        },
-        {
-            "action": "scroll",
-            "direction": "down",
-            "distance": 500,
-            "duration": 300
-        },
-        {
-            "action": "tap",
-            "element_id": "product_item",
-            "index": 3
-        },
-        {
-            "action": "wait",
-            "duration": 45000,
-            "description": "상품 페이지 체류"
-        },
-        {
-            "action": "airplane_mode_toggle",
-            "description": "IP 변경"
-        }
-    ]
-}
-```
-
-### 3. 페이지 이동 경로
-
-#### **경로 A: 네이버 통합검색**
-```
-1. 네이버 메인 (m.naver.com) 접속
-2. 검색창에 키워드 입력
-3. 쇼핑탭 클릭
-4. 스크롤하여 상품 찾기
-5. 상품 상세 페이지 진입
-6. 자연스러운 행동 (스크롤, 클릭)
-7. 체류 (30~60초)
-```
-
-#### **경로 B: 네이버쇼핑 직접 검색**
-```
-1. 네이버쇼핑 (m.shopping.naver.com) 접속
-2. 검색창에 키워드 입력
-3. 스크롤하여 상품 찾기
-4. 상품 상세 페이지 진입
-5. 자연스러운 행동 (스크롤, 클릭)
-6. 체류 (30~60초)
-```
-
-### 4. 상품 페이지 액션
-
-#### 스크롤 동작
-```python
-scroll_actions = [
-    "scroll_to_options",      # 옵션 영역까지 스크롤 (100%)
-    "scroll_to_reviews",      # 리뷰 영역까지 스크롤 (70%)
-    "scroll_to_qna",          # Q&A 영역까지 스크롤 (40%)
-]
-# 스크롤 속도: 100~300ms 간격으로 200~500px씩
-```
-
-#### 랜덤 액션 (확률 분포)
-```python
-actions = {
-    "add_to_cart": 0.3,        # 30% - 장바구니 담기
-    "click_review": 0.4,       # 40% - 리뷰 클릭
-    "click_qna": 0.2,          # 20% - 1:1 문의 클릭
-    "just_browse": 0.1,        # 10% - 그냥 둘러보기
-}
-```
-
-#### 체류 시간 (참여도별)
-```python
-import numpy as np
-
-# High: 평균 60초, 표준편차 15초
-stay_high = max(45, min(90, int(np.random.normal(60, 15))))
-
-# Medium: 평균 45초, 표준편차 10초
-stay_medium = max(30, min(60, int(np.random.normal(45, 10))))
-
-# Low: 평균 30초, 표준편차 8초
-stay_low = max(20, min(40, int(np.random.normal(30, 8))))
+# 캠페인 완료 후
+1. 30분 대기 (네이버 순위 반영 시간)
+2. 순위 체크 봇에게 "product_id" 순위 체크 요청
+3. After 순위 저장
+4. Before/After 비교 → 순위 변동 계산
 ```
 
 ---
 
-## 📱 Android 봇 에이전트 아키텍처
+## 🔧 Android 봇 에이전트 아키텍처
 
-### 1. 백그라운드 서비스 구조
+### 시스템 요구사항
+- **최소 Android 버전**: Android 7.0 (API 24)
+- **Root 권한**: 필수 (`su` 명령어 사용)
+- **권장 기기**: Samsung Galaxy 시리즈 (S21, S22, S23, S24)
 
+### 핵심 컴포넌트
+
+#### 1. BotService.java (백그라운드 서비스)
 ```java
 public class BotService extends Service {
-    private String botId;
-    private ApiClient apiClient;
-    private TaskExecutor taskExecutor;
+    // 24/7 실행되는 ForegroundService
+    // 서버와 HTTP 통신으로 작업 요청 및 결과 보고
     
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        // 24/7 백그라운드 실행
-        startForeground(NOTIFICATION_ID, createNotification());
-        
-        // 작업 루프 시작
-        new Thread(() -> {
-            while (true) {
-                try {
-                    // 1. 서버에서 작업 요청
-                    TaskResponse task = apiClient.getTask(botId);
-                    
-                    if ("wait".equals(task.getTaskId())) {
-                        // 대기 명령
-                        Thread.sleep(task.getWaitDuration());
-                        continue;
-                    }
-                    
-                    // 2. JSON 패턴 실행
-                    boolean success = taskExecutor.execute(task.getPattern());
-                    
-                    // 3. 결과 보고
-                    apiClient.reportResult(botId, task.getTaskId(), 
-                        success ? "success" : "failed");
-                    
-                    // 4. 다음 작업 전 대기 (3~5분)
-                    Thread.sleep(randomInt(180000, 300000));
-                    
-                } catch (Exception e) {
-                    Log.e(TAG, "Task execution error", e);
-                    Thread.sleep(60000); // 1분 대기 후 재시도
-                }
-            }
-        }).start();
-        
-        return START_STICKY;
+        startForeground(NOTIFICATION_ID, notification);
+        startTaskLoop();  // 무한 루프로 작업 요청
+        return START_STICKY;  // 시스템이 종료해도 자동 재시작
     }
 }
 ```
 
-### 2. JSON 작업 패턴 실행 엔진
-
+#### 2. TaskExecutor.java (JSON 패턴 실행 엔진)
 ```java
 public class TaskExecutor {
-    private RootController rootController;
+    // 서버에서 받은 JSON 작업 패턴을 순차 실행
     
-    public boolean execute(List<ActionStep> pattern) {
-        for (ActionStep step : pattern) {
-            try {
-                switch (step.getAction()) {
-                    case "open_url":
-                        openUrl(step.getUrl());
-                        break;
-                    case "tap":
-                        rootController.tap(step.getX(), step.getY());
-                        break;
-                    case "input_text":
-                        rootController.inputText(step.getText());
-                        break;
-                    case "scroll":
-                        rootController.scroll(step.getDirection(), 
-                            step.getDistance(), step.getDuration());
-                        break;
-                    case "wait":
-                        Thread.sleep(step.getDuration());
-                        break;
-                    case "airplane_mode_toggle":
-                        toggleAirplaneMode();
-                        break;
-                }
-                
-                // 액션 간 랜덤 대기
-                Thread.sleep(randomInt(500, 1500));
-                
-            } catch (Exception e) {
-                Log.e(TAG, "Action failed: " + step.getAction(), e);
-                return false;
+    public void executePattern(JSONArray pattern) {
+        for (int i = 0; i < pattern.length(); i++) {
+            JSONObject action = pattern.getJSONObject(i);
+            String actionType = action.getString("action");
+            
+            switch (actionType) {
+                case "open_url":
+                    openUrl(action.getString("url"));
+                    break;
+                case "tap":
+                    tap(action.getInt("x"), action.getInt("y"));
+                    break;
+                case "scroll":
+                    scroll(action.getInt("distance"));
+                    break;
+                case "wait":
+                    Thread.sleep(action.getInt("duration"));
+                    break;
             }
         }
-        return true;
     }
 }
 ```
 
-### 3. Root 기반 UI 제어
-
+#### 3. RootController.java (Root 기반 UI 제어)
 ```java
 public class RootController {
-    /**
-     * Root 권한으로 화면 탭
-     */
+    // Root 권한으로 UI 제어 (ADB 불필요)
+    
     public void tap(int x, int y) {
         executeRootCommand("input tap " + x + " " + y);
     }
     
-    /**
-     * Root 권한으로 텍스트 입력
-     */
     public void inputText(String text) {
-        // 한글 입력을 위해 URL 인코딩
-        String encoded = URLEncoder.encode(text, "UTF-8");
-        executeRootCommand("input text " + encoded);
+        executeRootCommand("input text \"" + text + "\"");
     }
     
-    /**
-     * Root 권한으로 스크롤 (swipe)
-     */
-    public void scroll(String direction, int distance, int duration) {
-        int startX = 540, startY = 1500;
-        int endX = startX, endY = startY - distance;
-        
-        executeRootCommand(String.format(
-            "input swipe %d %d %d %d %d",
-            startX, startY, endX, endY, duration
-        ));
+    public void scroll(int distance) {
+        executeRootCommand("input swipe 540 1500 540 " + (1500 - distance) + " 300");
     }
     
-    /**
-     * Root 명령어 실행
-     */
-    private void executeRootCommand(String command) {
-        try {
-            Process process = Runtime.getRuntime().exec("su");
-            DataOutputStream os = new DataOutputStream(process.getOutputStream());
-            os.writeBytes(command + "\n");
-            os.writeBytes("exit\n");
-            os.flush();
-            process.waitFor();
-        } catch (Exception e) {
-            Log.e(TAG, "Root command failed: " + command, e);
-        }
+    public void toggleAirplaneMode() {
+        // 대장 봇만 실행
+        executeRootCommand("cmd connectivity airplane-mode enable");
+        Thread.sleep(2000);
+        executeRootCommand("cmd connectivity airplane-mode disable");
     }
 }
 ```
 
-### 4. 비행기 모드 IP 변경
-
+#### 4. ApiClient.java (HTTP API 클라이언트)
 ```java
-public void toggleAirplaneMode() throws InterruptedException {
-    // 1. 비행기 모드 ON
-    executeRootCommand("cmd connectivity airplane-mode enable");
-    Thread.sleep(3000);
+public class ApiClient {
+    private static final String BASE_URL = "https://your-railway-app.railway.app";
     
-    // 2. 비행기 모드 OFF
-    executeRootCommand("cmd connectivity airplane-mode disable");
-    
-    // 3. 네트워크 재연결 대기 (최대 10초)
-    for (int i = 0; i < 10; i++) {
-        if (isNetworkConnected()) {
-            Log.i(TAG, "Network reconnected");
-            return;
-        }
-        Thread.sleep(1000);
+    // 작업 요청
+    public Task getTask(String botId) {
+        Response response = retrofit.get("/api/v1/traffic/get_task?bot_id=" + botId);
+        return response.body();
     }
     
-    throw new NetworkException("Network reconnection timeout");
+    // 결과 보고
+    public void reportResult(String botId, String taskId, String status) {
+        retrofit.post("/api/v1/traffic/report_result", new ReportRequest(botId, taskId, status));
+    }
+    
+    // 순위 체크 요청 (순위 체크 봇 전용)
+    public List<Product> getProductsToCheck() {
+        Response response = retrofit.get("/api/v1/rank/check_products");
+        return response.body();
+    }
+    
+    // 순위 결과 보고 (순위 체크 봇 전용)
+    public void reportRank(String botId, String productId, int rank) {
+        retrofit.post("/api/v1/rank/report_rank", new RankReport(botId, productId, rank));
+    }
 }
 ```
 
-### 5. UI 좌표 맵 캐싱
+### 작업 프로세스 (트래픽 작업 봇)
 
-```java
-public class CoordinateCache {
-    private Map<String, Coordinate> coordinateMap;
-    
-    /**
-     * 서버에서 해상도별 UI 좌표 맵 다운로드
-     */
-    public void loadFromServer(String resolution) {
-        Response<CoordinateMap> response = apiClient.getCoordinates(resolution);
-        this.coordinateMap = response.getData().getCoordinates();
-    }
-    
-    /**
-     * 좌표 조회
-     */
-    public Coordinate get(String elementId) {
-        return coordinateMap.get(elementId);
-    }
-}
+```
+1. 봇 등록
+   ├─ POST /api/v1/traffic/register
+   ├─ { "android_id": "xxx", "device_model": "SM-S928N", "is_leader": true }
+   └─ 서버가 bot_id 발급
+
+2. 작업 요청 (무한 루프)
+   ├─ GET /api/v1/traffic/get_task?bot_id=xxx
+   ├─ 서버가 캠페인 할당 (첫 요청 시)
+   └─ JSON 작업 패턴 수신
+
+3. 작업 실행
+   ├─ TaskExecutor가 JSON 패턴 순차 실행
+   ├─ open_url → tap → scroll → wait → ...
+   └─ 실행 시간 측정
+
+4. 결과 보고
+   ├─ POST /api/v1/traffic/report_result
+   ├─ { "bot_id": "xxx", "task_id": "yyy", "status": "success" }
+   └─ 서버가 진행률 업데이트
+
+5. 반복
+   ├─ 100회 완료까지 2~4 반복
+   └─ 완료 후 10초 대기 → 새로운 캠페인 요청
+```
+
+### 작업 프로세스 (순위 체크 봇)
+
+```
+1. 봇 등록
+   ├─ POST /api/v1/rank/register
+   ├─ { "android_id": "xxx", "device_model": "SM-S928N" }
+   └─ 서버가 bot_id 발급
+
+2. 순위 체크 요청
+   ├─ GET /api/v1/rank/check_products
+   └─ 서버가 체크할 제품 목록 반환
+
+3. 순위 체크 실행
+   ├─ 네이버 쇼핑 검색
+   ├─ 검색 결과 크롤링
+   └─ 순위 계산 (페이지, 위치)
+
+4. 결과 보고
+   ├─ POST /api/v1/rank/report_rank
+   ├─ { "bot_id": "xxx", "product_id": "12345678", "rank": 28 }
+   └─ 서버가 Rankings 테이블에 저장
+
+5. 대기
+   ├─ 30분 대기
+   └─ 2~4 반복
 ```
 
 ---
 
-## 📊 평가 지표 및 데이터 수집
+## 📊 데이터베이스 구조
 
-### 1. 순위 계산 방식
-
-```python
-# 네이버 쇼핑 검색 결과: 1페이지당 20개 상품
-def calculate_rank(page: int, position: int) -> int:
-    """
-    Args:
-        page: 페이지 번호 (1부터 시작)
-        position: 페이지 내 위치 (1-20)
-    
-    Returns:
-        전체 순위 (1부터 시작)
-    
-    Examples:
-        >>> calculate_rank(1, 1)   # 1페이지 1번째
-        1
-        >>> calculate_rank(4, 1)   # 4페이지 1번째
-        61
-    """
-    return (page - 1) * 20 + position
-
-# 순위 변동 계산
-def calculate_rank_change(before_rank: int, after_rank: int) -> int:
-    """
-    순위 변동 계산 (음수 = 상승, 양수 = 하락)
-    
-    Examples:
-        >>> calculate_rank_change(52, 28)  # 52위 → 28위
-        -24  # 24위 상승
-    """
-    return after_rank - before_rank
-```
-
-### 2. 데이터베이스 구조
-
-#### Bots 테이블
+### Bots 테이블 (통합)
 ```sql
 CREATE TABLE bots (
     bot_id VARCHAR(36) PRIMARY KEY,
+    bot_type VARCHAR(20) NOT NULL,  -- 'traffic' or 'rank_checker'
     android_id VARCHAR(64) UNIQUE NOT NULL,
     device_model VARCHAR(50) NOT NULL,
-    android_version VARCHAR(20) NOT NULL,
-    screen_resolution VARCHAR(20) NOT NULL,
-    "group" INTEGER,
+    
+    -- 트래픽 봇 전용 필드
+    is_leader BOOLEAN DEFAULT FALSE,
+    leader_bot_id VARCHAR(36),
+    group_id INTEGER,
     assigned_campaign_id VARCHAR(36),
+    
+    -- 공통 필드
     status VARCHAR(20) DEFAULT 'active',
     registered_at TIMESTAMP DEFAULT NOW(),
     last_task_at TIMESTAMP,
-    last_seen_at TIMESTAMP,
     success_count INTEGER DEFAULT 0,
-    fail_count INTEGER DEFAULT 0,
-    total_traffic_generated INTEGER DEFAULT 0
+    fail_count INTEGER DEFAULT 0
 );
+
+CREATE INDEX idx_bots_type ON bots(bot_type);
+CREATE INDEX idx_bots_status ON bots(status);
+CREATE INDEX idx_bots_assigned_campaign ON bots(assigned_campaign_id);
 ```
 
-#### Campaigns 테이블
+### Campaigns 테이블
 ```sql
 CREATE TABLE campaigns (
     campaign_id VARCHAR(36) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
+    target_product_id VARCHAR(64) NOT NULL,
+    target_product_url TEXT NOT NULL,
     target_keyword VARCHAR(100) NOT NULL,
-    target_traffic INTEGER NOT NULL,
-    test_case VARCHAR(20) NOT NULL,
-    execution_mode VARCHAR(20) DEFAULT 'appium',
+    target_traffic INTEGER DEFAULT 100,
+    test_case VARCHAR(10) NOT NULL,
+    execution_mode VARCHAR(20) DEFAULT 'root',
     identity_profile_group VARCHAR(50),
+    status VARCHAR(20) DEFAULT 'pending',
     assigned_bot_id VARCHAR(36),
-    status VARCHAR(20) DEFAULT 'active',
+    progress INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT NOW(),
     started_at TIMESTAMP,
-    completed_at TIMESTAMP,
-    current_traffic_count INTEGER DEFAULT 0,
-    success_tasks INTEGER DEFAULT 0,
-    fail_tasks INTEGER DEFAULT 0
+    completed_at TIMESTAMP
 );
+
+CREATE INDEX idx_campaigns_status ON campaigns(status);
+CREATE INDEX idx_campaigns_assigned_bot ON campaigns(assigned_bot_id);
 ```
 
-#### Tasks 테이블
+### Tasks 테이블
 ```sql
 CREATE TABLE tasks (
     task_id VARCHAR(36) PRIMARY KEY,
+    campaign_id VARCHAR(36) NOT NULL,
     bot_id VARCHAR(36) NOT NULL,
-    campaign_id VARCHAR(36),
-    "group" INTEGER NOT NULL,
     pattern JSONB NOT NULL,
-    status VARCHAR(20) DEFAULT 'assigned',
+    status VARCHAR(20) DEFAULT 'pending',
+    execution_time FLOAT,
+    error_message TEXT,
     created_at TIMESTAMP DEFAULT NOW(),
     started_at TIMESTAMP,
     completed_at TIMESTAMP,
-    log TEXT,
-    error_message TEXT
+    FOREIGN KEY (campaign_id) REFERENCES campaigns(campaign_id),
+    FOREIGN KEY (bot_id) REFERENCES bots(bot_id)
 );
+
+CREATE INDEX idx_tasks_campaign ON tasks(campaign_id);
+CREATE INDEX idx_tasks_bot ON tasks(bot_id);
+CREATE INDEX idx_tasks_status ON tasks(status);
 ```
 
-### 3. 효과성 측정 기준
+### Rankings 테이블
+```sql
+CREATE TABLE rankings (
+    ranking_id VARCHAR(36) PRIMARY KEY,
+    product_id VARCHAR(64) NOT NULL,
+    campaign_id VARCHAR(36),
+    rank INTEGER NOT NULL,
+    page INTEGER NOT NULL,
+    position INTEGER NOT NULL,
+    checked_at TIMESTAMP DEFAULT NOW(),
+    checked_by VARCHAR(36),
+    rank_type VARCHAR(20),  -- 'before', 'during', 'after', 'periodic'
+    FOREIGN KEY (campaign_id) REFERENCES campaigns(campaign_id),
+    FOREIGN KEY (checked_by) REFERENCES bots(bot_id)
+);
 
-1. **순위 변동폭**: 평균 몇 위 상승/하락
-2. **페이지 이동**: 페이지 간 이동 발생 여부
-3. **안정성**: 순위 변동의 일관성
-4. **테스트 케이스 비교**: ANOVA 분석을 통한 최적 조합 도출
-
-### 4. ANOVA 분석
-
-```python
-from scipy import stats
-
-# 7차원 변수별 순위 변동 데이터
-data_by_platform = {
-    'mobile': [rank_changes...],
-    'pc': [rank_changes...]
-}
-
-# F-검정
-f_stat, p_value = stats.f_oneway(
-    data_by_platform['mobile'],
-    data_by_platform['pc']
-)
-
-if p_value < 0.05:
-    print("플랫폼 변수가 순위 변동에 유의미한 영향을 미침")
+CREATE INDEX idx_rankings_product ON rankings(product_id);
+CREATE INDEX idx_rankings_campaign ON rankings(campaign_id);
+CREATE INDEX idx_rankings_checked_at ON rankings(checked_at);
 ```
 
 ---
 
-## 🛡️ 안티 탐지 시스템
+## 🚀 서버 환경 설정 (Railway)
 
-### 1. Identity Profiles
+### Railway 배포 가이드
 
-15개의 Samsung 기기 프로필을 사전 정의하여 다양한 브라우저 지문을 생성합니다.
+#### 1. Railway 프로젝트 생성
+```bash
+# Railway CLI 설치
+npm install -g @railway/cli
+
+# 로그인
+railway login
+
+# 프로젝트 생성
+railway init
+```
+
+#### 2. PostgreSQL 추가
+```bash
+# Railway 대시보드에서 "New" → "Database" → "PostgreSQL" 선택
+# 자동으로 DATABASE_URL 환경변수 생성됨
+```
+
+#### 3. Redis 추가
+```bash
+# Railway 대시보드에서 "New" → "Database" → "Redis" 선택
+# 자동으로 REDIS_URL 환경변수 생성됨
+```
+
+#### 4. 환경변수 설정
+```bash
+# Railway 대시보드 → Variables 탭
+PORT=8000
+DATABASE_URL=postgresql://...  # 자동 생성
+REDIS_URL=redis://...  # 자동 생성
+ADMIN_PASSWORD=your_secure_password
+```
+
+#### 5. GitHub 연동 배포
+```bash
+# Railway 대시보드 → Settings → "Connect Repo"
+# GitHub 저장소 선택 (mim1012/turafic)
+# 자동으로 main 브랜치 배포
+```
+
+#### 6. 도메인 설정
+```bash
+# Railway 대시보드 → Settings → "Generate Domain"
+# 자동 HTTPS 도메인 생성: https://your-app.railway.app
+```
+
+### Railway 무료 티어 제한
+- **실행 시간**: 500시간/월
+- **메모리**: 512MB
+- **CPU**: 공유 vCPU
+- **네트워크**: 100GB/월
+- **PostgreSQL**: 1GB 스토리지
+- **Redis**: 100MB 메모리
+
+### 서버 실행
+```bash
+# 로컬 개발
+cd server
+pip install -r requirements.txt
+python main.py
+
+# Railway 배포 (자동)
+git push origin main  # Railway가 자동으로 감지하여 배포
+```
+
+---
+
+## 🎨 안티 탐지 시스템
+
+### 1. Identity Profiles (15개 Samsung 기기)
 
 ```python
 identity_profiles = [
     {
-        "profile_id": "samsung_s24_ultra_1",
+        "device_model": "SM-S928N",  # Galaxy S24 Ultra
         "user_agent": "Mozilla/5.0 (Linux; Android 14; SM-S928N) AppleWebKit/537.36...",
-        "device_model": "SM-S928N",
-        "screen_resolution": "1440x3088",
-        "cookies": {...},
-        "headers": {
-            "Accept-Language": "ko-KR,ko;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br"
-        },
-        "fingerprint": {
-            "canvas": "hash_value_1",
-            "webgl": "hash_value_2",
-            "fonts": ["NanumGothic", "Roboto", ...]
-        }
+        "screen_resolution": "1440x3200",
+        "android_version": "14"
     },
-    # ... 14개 더
+    {
+        "device_model": "SM-G998N",  # Galaxy S21 Ultra
+        "user_agent": "Mozilla/5.0 (Linux; Android 13; SM-G998N) AppleWebKit/537.36...",
+        "screen_resolution": "1440x3200",
+        "android_version": "13"
+    },
+    # ... 13개 더
 ]
 ```
 
-### 2. IP 로테이션 전략
+### 2. IP 로테이션 (핫스팟 기반)
 
-- **Per Traffic**: 1회 트래픽당 1회 IP 변경 (비행기 모드 토글)
-- **Per Session**: 1회 세션당 1회 IP 변경 (여러 트래픽 공유)
+**대장 봇**:
+```java
+// Per Traffic 전략
+public void changeIpPerTraffic() {
+    toggleAirplaneMode();  // 비행기 모드 토글
+    Thread.sleep(5000);  // 5초 대기
+    notifySubordinates();  // 쫄병들에게 IP 변경 완료 신호
+}
+
+// Per Session 전략
+public void changeIpPerSession() {
+    if (isNewSession()) {
+        toggleAirplaneMode();
+        Thread.sleep(5000);
+        notifySubordinates();
+    }
+}
+```
+
+**쫄병 봇**:
+```java
+// 대장의 IP 변경 완료 신호 대기
+public void waitForLeaderIpChange() {
+    while (!leaderIpChanged) {
+        Thread.sleep(100);
+    }
+    // IP 변경 완료, 작업 계속
+}
+```
 
 ### 3. 행동 패턴 무작위화
 
 ```python
-# 좌표 무작위화 (±10px)
-def randomize_coordinate(x, y):
-    return (
-        x + random.randint(-10, 10),
-        y + random.randint(-10, 10)
-    )
-
-# 체류 시간 무작위화 (정규분포)
-def randomize_stay_duration(mean, std):
-    return max(mean - 2*std, min(mean + 2*std, 
-        int(np.random.normal(mean, std))))
+# 체류 시간 무작위화
+dwell_time = base_time + random.randint(-variation, variation)
 
 # 스크롤 속도 무작위화
-def randomize_scroll_speed():
-    return random.randint(100, 300)  # ms
+scroll_speed = random.randint(200, 500)  # ms
+
+# 좌표 무작위화 (±10px)
+tap_x = base_x + random.randint(-10, 10)
+tap_y = base_y + random.randint(-10, 10)
 ```
 
 ---
 
-## 💻 프로젝트 구조
+## 📈 데이터 분석
+
+### ANOVA (분산 분석)
+
+```python
+import pandas as pd
+from scipy import stats
+
+# 데이터 수집
+df = pd.read_sql("SELECT * FROM rankings WHERE rank_type='after'", conn)
+
+# ANOVA 분석
+f_stat, p_value = stats.f_oneway(
+    df[df['test_case']=='TC#1']['rank'],
+    df[df['test_case']=='TC#2']['rank'],
+    # ... TC#18까지
+)
+
+# 결과 해석
+if p_value < 0.05:
+    print("테스트 케이스 간 유의미한 차이 존재")
+else:
+    print("테스트 케이스 간 유의미한 차이 없음")
+```
+
+### 최적 조합 도출
+
+```python
+# 순위 변동이 가장 큰 테스트 케이스 찾기
+best_tc = df.groupby('test_case')['rank_change'].mean().idxmin()
+print(f"최적 테스트 케이스: {best_tc}")
+
+# 변수별 영향도 분석
+for var in ['platform', 'engagement', 'user_agent', ...]:
+    print(f"{var}: {df.groupby(var)['rank_change'].mean()}")
+```
+
+---
+
+## 🛠️ 프로젝트 구조
 
 ```
 turafic/
-├── CLAUDE.md                      # 이 파일
-├── README.md                      # 프로젝트 설명
-├── ARCHITECTURE.md                # 시스템 아키텍처
-├── TASK_ALLOCATION_MODEL.md       # 작업 할당 모델 상세
-├── requirements.txt               # Python 의존성
-│
-├── server/                        # C&C 서버
-│   ├── main.py                    # FastAPI 앱 진입점
-│   ├── api/
-│   │   ├── bot_management.py      # 봇 관리 API
-│   │   ├── task_assignment.py     # 작업 할당 API
-│   │   └── admin.py               # 관리자 대시보드 API
+├── server/                      # C&C 서버 (FastAPI)
+│   ├── main.py                  # 서버 진입점
 │   ├── core/
-│   │   ├── database.py            # DB 연결 및 모델
-│   │   ├── cache.py               # Redis 캐시
-│   │   ├── task_engine.py         # 작업 할당 로직
-│   │   ├── identity_profiles.py   # Identity Profiles
-│   │   ├── http_pattern_generator.py  # HTTP 모드 패턴
-│   │   └── appium_pattern_generator.py  # Appium 모드 패턴
-│   ├── migrations/                # DB 마이그레이션
+│   │   ├── database.py          # PostgreSQL 연결
+│   │   └── redis_client.py      # Redis 연결
+│   ├── api/
+│   │   ├── traffic_bot.py       # 트래픽 봇 API
+│   │   ├── rank_checker.py      # 순위 체크 봇 API
+│   │   ├── admin.py             # 관리자 API
+│   │   └── task_assignment.py   # 작업 할당 엔진
+│   ├── models/
+│   │   ├── bot.py               # Bot 모델
+│   │   ├── campaign.py          # Campaign 모델
+│   │   ├── task.py              # Task 모델
+│   │   └── ranking.py           # Ranking 모델
+│   ├── migrations/              # DB 마이그레이션
 │   │   └── add_bot_campaign_assignment.sql
-│   └── config/
-│       └── server_settings.py     # 서버 설정
-│
-├── android_agent/                 # Android 봇 에이전트
+│   └── requirements.txt
+├── android_agent/               # Android 봇 에이전트 (APK)
 │   ├── app/
-│   │   ├── src/main/java/com/turafic/
-│   │   │   ├── service/
-│   │   │   │   └── BotService.java        # 백그라운드 서비스
-│   │   │   ├── executor/
-│   │   │   │   ├── TaskExecutor.java      # JSON 패턴 실행
-│   │   │   │   └── RootController.java    # Root 제어
-│   │   │   ├── network/
-│   │   │   │   └── ApiClient.java         # HTTP 클라이언트
-│   │   │   └── models/
-│   │   │       ├── TaskResponse.java
-│   │   │       └── ActionStep.java
+│   │   ├── src/main/java/
+│   │   │   ├── BotService.java
+│   │   │   ├── TaskExecutor.java
+│   │   │   ├── RootController.java
+│   │   │   └── ApiClient.java
 │   │   └── AndroidManifest.xml
 │   └── build.gradle
-│
-├── config/
-│   ├── test_matrix.json           # L18 테스트 매트릭스
-│   ├── identity_profiles.json     # Identity Profiles
-│   └── ui_coordinates/            # 해상도별 UI 좌표 맵
-│       ├── 1080x2340.json
-│       └── 1440x3200.json
-│
-├── data/
-│   ├── rankings/                  # 순위 데이터 (백업)
-│   └── results/                   # 분석 결과
-│
-├── logs/                          # 로그 파일
-│
-└── tests/                         # 단위 테스트
-    ├── test_task_engine.py
-    └── test_identity_profiles.py
+├── CLAUDE.md                    # 이 파일
+├── ARCHITECTURE.md              # 아키텍처 설명
+└── TASK_ALLOCATION_MODEL.md     # 작업 할당 모델 설명
 ```
 
 ---
 
-## 🚀 구현 우선순위
+## 📝 개발 가이드
 
-### Phase 1: C&C 서버 구축 (1주차)
-- [x] FastAPI 서버 구현
-- [x] PostgreSQL 데이터베이스 설계
-- [x] 봇 관리 API 구현
-- [x] 작업 할당 엔진 구현 ("1봇 = 1캠페인 전담")
-- [x] Identity Profiles 시스템
+### 서버 개발
 
-### Phase 2: Android 봇 에이전트 개발 (2주차)
-- [ ] 백그라운드 서비스 구현
-- [ ] JSON 작업 패턴 실행 엔진
-- [ ] Root 기반 UI 제어 (su + input)
-- [ ] 비행기 모드 IP 변경 자동화
-- [ ] HTTP API 클라이언트 (Retrofit)
-
-### Phase 3: 테스트 매트릭스 설계 (3주차)
-- [x] L18 직교배열 설계
-- [x] 7차원 변수 정의
-- [x] Identity Profiles 생성 (15개 Samsung 기기)
-- [ ] UI 좌표 맵 생성 (해상도별)
-
-### Phase 4: 분산 실행 및 데이터 수집 (4주차)
-- [ ] 9개 봇 × 18개 테스트 케이스 실행
-- [ ] 실시간 모니터링 대시보드
-- [ ] ANOVA 분석 및 최적 조합 도출
-- [ ] 보고서 자동 생성
-
----
-
-## 🔧 필수 환경 설정
-
-### 1. 서버 환경 (Oracle Cloud 무료 티어)
-
-#### 인스턴스 생성
 ```bash
-# Oracle Cloud 무료 티어
-- Shape: VM.Standard.A1.Flex (ARM, 4 OCPU, 24GB RAM)
-- OS: Ubuntu 22.04 LTS
-- Storage: 200GB Block Volume
-```
+# 가상환경 생성
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-#### 서버 소프트웨어 설치
-```bash
-# Python 3.10+
-sudo apt update
-sudo apt install python3.10 python3-pip
-
-# PostgreSQL
-sudo apt install postgresql postgresql-contrib
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
-
-# Redis
-sudo apt install redis-server
-sudo systemctl start redis
-sudo systemctl enable redis
-
-# Nginx (리버스 프록시)
-sudo apt install nginx
-```
-
-#### Python 가상환경
-```bash
-cd /home/ubuntu/turafic/server
-python3 -m venv venv
-source venv/bin/activate
+# 의존성 설치
+cd server
 pip install -r requirements.txt
-```
 
-#### 데이터베이스 초기화
-```bash
-# PostgreSQL 사용자 및 데이터베이스 생성
-sudo -u postgres psql
-CREATE DATABASE turafic;
-CREATE USER turafic_user WITH PASSWORD 'your_password';
-GRANT ALL PRIVILEGES ON DATABASE turafic TO turafic_user;
-\q
+# 데이터베이스 마이그레이션
+psql $DATABASE_URL < migrations/add_bot_campaign_assignment.sql
 
-# 마이그레이션 실행
-psql -U turafic_user -d turafic -f server/migrations/add_bot_campaign_assignment.sql
-```
-
-#### 서버 실행
-```bash
-cd /home/ubuntu/turafic/server
-source venv/bin/activate
+# 서버 실행
 python main.py
-
-# 또는 Uvicorn으로 실행
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
-
-### 2. Android 기기 설정
-
-#### Root 권한 획득
-```
-1. 기기 Bootloader 언락
-2. Magisk 설치 (https://github.com/topjohnwu/Magisk)
-3. Root 권한 확인: `su` 명령어 실행
-```
-
-#### 개발자 옵션 활성화
-```
-1. 설정 > 휴대전화 정보 > 빌드번호 7회 탭
-2. 설정 > 개발자 옵션 > USB 디버깅 ON
-3. 설정 > 개발자 옵션 > 화면 켜짐 상태 유지 ON
-```
-
-#### APK 빌드 및 설치
-```bash
-# Android Studio에서 빌드
-cd /home/ubuntu/turafic/android_agent
-./gradlew assembleRelease
-
-# APK 설치
-adb install app/build/outputs/apk/release/app-release.apk
-
-# 또는 기기에서 직접 설치
-```
-
-### 3. 환경변수 설정
-
-#### 서버 (.env)
-```bash
-# 데이터베이스
-DATABASE_URL=postgresql+asyncpg://turafic_user:your_password@localhost/turafic
-
-# Redis
-REDIS_URL=redis://localhost:6379/0
-
-# 서버 설정
-SERVER_HOST=0.0.0.0
-SERVER_PORT=8000
-LOG_LEVEL=INFO
-
-# 보안
-API_KEY=your_api_key_here
-```
-
-#### Android (config.properties)
-```properties
-# C&C 서버 URL
-server_url=https://your-server-ip:8000
-
-# API 키
-api_key=your_api_key_here
-
-# 로그 레벨
-log_level=INFO
-```
-
----
-
-## 🤖 Claude 작업 지침
-
-### 파일 생성 규칙
-- **절대 금지**: 불필요한 README.md, 문서 파일 자동 생성
-- **우선순위**: 기존 파일 수정 > 새 파일 생성
-- **필수 확인**: 파일 생성 전 사용자에게 확인 요청
-
-### 코드 작성 원칙
-1. **모듈화**: 각 기능을 독립적인 모듈로 분리
-2. **재사용성**: 공통 로직은 utils에 작성
-3. **에러 핸들링**: 모든 외부 API 호출에 try-except 적용
-4. **로깅**: 중요한 이벤트는 반드시 로그 기록
-5. **타입 힌팅**: Python 3.10+ 타입 힌트 적극 사용
-
-### 작업 할당 모델 준수
-- **"1봇 = 1캠페인 전담"** 원칙 절대 준수
-- 봇이 여러 캠페인을 섞어서 실행하지 않도록 주의
-- 캠페인 완료 시 `assigned_bot_id` 해제 필수
-
-### 데이터베이스 우선
-- 모든 데이터는 PostgreSQL에 저장
-- JSON/CSV는 백업 용도로만 사용
-- 실시간 데이터는 Redis 캐시 활용
-
-### API 우선
-- 봇과 서버 간 통신은 REST API만 사용
-- WebSocket은 실시간 모니터링에만 사용
-- gRPC는 고성능 필요 시에만 고려
-
-### 안티 탐지 필수
-- Identity Profiles 필수 사용
-- IP 로테이션 전략 준수
-- 행동 패턴 무작위화 적용
-
----
-
-## 📖 참고 자료
-
-### C&C 서버
-- [FastAPI 공식 문서](https://fastapi.tiangolo.com/)
-- [PostgreSQL 공식 문서](https://www.postgresql.org/docs/)
-- [Redis 공식 문서](https://redis.io/documentation)
 
 ### Android 개발
-- [Android Background Services](https://developer.android.com/guide/components/services)
-- [Retrofit HTTP Client](https://square.github.io/retrofit/)
-- [Magisk Root](https://github.com/topjohnwu/Magisk)
 
-### 실험 설계
-- [직교배열 (Orthogonal Array)](https://en.wikipedia.org/wiki/Orthogonal_array)
-- [ANOVA 분석](https://en.wikipedia.org/wiki/Analysis_of_variance)
+```bash
+# Android Studio에서 android_agent 프로젝트 열기
+# Build → Build APK(s)
+# APK 위치: android_agent/app/build/outputs/apk/debug/app-debug.apk
 
-### 봇 탐지 회피
-- 터치 이벤트 시뮬레이션
-- 실제 사용자처럼 불규칙한 스크롤
-- 체류 시간 정규분포 랜덤화
-- 기기 fingerprinting 최소화
-- IP 로테이션 (비행기 모드 활용)
+# ADB로 설치
+adb install app-debug.apk
+
+# 로그 확인
+adb logcat -s BotService TaskExecutor
+```
 
 ---
 
-## ⚠️ 주의사항
+## 🔍 테스트 시나리오 예시
 
-1. **법적 책임**: 본 프로젝트는 학습/연구 목적이며, 상업적 남용 금지
-2. **서비스 약관**: 네이버 서비스 약관 준수
-3. **트래픽 제한**: 서버에 과부하를 주지 않도록 적절한 간격 유지
-4. **IP 밴 리스크**: 비행기 모드 토글로 IP 변경하지만, 기기 fingerprinting 주의
-5. **데이터 보안**: 테스트 결과 데이터의 외부 유출 방지
-6. **Root 권한**: Root 권한 사용 시 보안 위험 인지
+### 1개 제품 × 18개 테스트 케이스
+
+```python
+# 사용자가 제공하는 제품 정보
+product = {
+    "product_id": "12345678",
+    "product_name": "삼성 갤럭시 S24 울트라",
+    "product_url": "https://shopping.naver.com/catalog/12345678",
+    "search_keyword": "삼성 갤럭시 S24"
+}
+
+# 18개 캠페인 생성
+for tc in range(1, 19):
+    campaign = create_campaign(
+        product_id=product["product_id"],
+        product_url=product["product_url"],
+        search_keyword=product["search_keyword"],
+        test_case=f"TC#{tc}",
+        target_traffic=100  # 고정
+    )
+```
+
+### 실행 결과
+
+| 테스트 케이스 | Before 순위 | After 순위 | 순위 변동 | 실행 시간 |
+|--------------|------------|-----------|----------|----------|
+| TC#1 | 45 | 28 | +17 | 2.5시간 |
+| TC#2 | 45 | 32 | +13 | 3.1시간 |
+| TC#3 | 45 | 41 | +4 | 2.8시간 |
+| ... | ... | ... | ... | ... |
+| TC#18 | 45 | 38 | +7 | 2.9시간 |
+
+**최적 조합**: TC#1 (Mobile, High, Real Device, Fresh, Per Traffic, Naver Search, Standard)
 
 ---
 
-## 📞 문의 및 개선 제안
+## 🚨 주의사항
 
-프로젝트 개선 아이디어나 버그 발견 시 GitHub 이슈 등록 바랍니다.
+### 법적 리스크
+- 이 프로젝트는 **교육 목적**으로만 사용해야 합니다.
+- 실제 상업적 목적으로 사용 시 네이버 이용약관 위반 가능
+- 봇 탐지 시 계정 차단 또는 법적 조치 가능
 
-**Repository**: https://github.com/mim1012/turafic
+### 윤리적 고려사항
+- 공정한 경쟁 환경 훼손
+- 다른 판매자에게 불이익
+- 소비자 기만 가능성
 
-**마지막 업데이트**: 2025-11-01
+### 기술적 제한사항
+- 네이버의 봇 탐지 알고리즘은 지속적으로 진화
+- IP 차단, CAPTCHA, 행동 패턴 분석 등으로 탐지 가능
+- 대규모 트래픽 생성 시 서버 부하 및 비용 증가
+
+---
+
+## 📚 참고 자료
+
+- [L18 직교배열 설계](https://en.wikipedia.org/wiki/Orthogonal_array)
+- [ANOVA 분산 분석](https://en.wikipedia.org/wiki/Analysis_of_variance)
+- [Railway 배포 가이드](https://docs.railway.app/)
+- [Android Root 권한 사용](https://developer.android.com/guide/topics/security/permissions)
+- [FastAPI 공식 문서](https://fastapi.tiangolo.com/)
+
+---
+
+## 📞 문의
+
+- GitHub Issues: https://github.com/mim1012/turafic/issues
+- Email: your-email@example.com
+
+---
+
+**마지막 업데이트**: 2025-11-01  
+**버전**: 2.0 (C&C 서버 + 분산 봇 네트워크)
