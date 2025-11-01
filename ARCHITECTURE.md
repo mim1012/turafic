@@ -210,32 +210,40 @@ android_agent/
 
 ## 핵심 설계 원칙
 
-### 1. 봇 ID 기반 상태 관리 (Stateful)
+### 1. "1봇 = 1캠페인 전담" 작업 할당 모델
+
+- 각 봇은 하나의 캠페인(테스트 케이스)에만 전담 할당
+- 할당된 캠페인을 100회 반복 실행
+- 여러 봇이 다른 테스트 케이스를 병렬 실행하여 전체 테스트 시간 단축
+- 테스트 케이스별 순수한 결과 측정 가능
+- 상세 내용: `TASK_ALLOCATION_MODEL.md` 참고
+
+### 2. 봇 ID 기반 상태 관리 (Stateful)
 
 - IP가 변경되어도 봇 ID는 불변
 - 각 봇의 상태, 성과, 이력 추적 가능
 - A/B 테스트 그룹 관리 용이
 
-### 2. 모듈 분리 (Separation of Concerns)
+### 3. 모듈 분리 (Separation of Concerns)
 
 - API 계층 (`api/`)
 - 비즈니스 로직 (`core/`)
 - 데이터 모델 (`models/`)
 - 설정 (`config/`)
 
-### 3. 확장성 (Scalability)
+### 4. 확장성 (Scalability)
 
 - 봇 수천 대 동시 관리 가능
 - 데이터베이스 수평 확장 (PostgreSQL)
 - 캐시 레이어 (Redis)
 
-### 4. 유연성 (Flexibility)
+### 5. 유연성 (Flexibility)
 
 - 코드 수정 없이 JSON으로 작업 변경 가능
 - 테스트 매트릭스 외부 파일 관리 (`test_matrix.json`)
 - 환경 변수 기반 설정
 
-### 5. 탐지 회피 (Anti-Detection)
+### 6. 탐지 회피 (Anti-Detection)
 
 - 무작위성 추가 (좌표, 시간)
 - 다양한 브라우저 지문 (7종 기기 모델)

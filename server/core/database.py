@@ -36,6 +36,9 @@ class Bot(Base):
     # A/B 테스트 그룹 (1~9)
     group = Column(Integer, nullable=True)
     
+    # 할당된 캠페인 (조회 편의성)
+    assigned_campaign_id = Column(String(36), nullable=True)
+    
     # 상태 관리
     status = Column(String(20), default="active")  # active, inactive, error
     registered_at = Column(DateTime, default=datetime.utcnow)
@@ -98,6 +101,7 @@ class Campaign(Base):
     # 통계
     total_tasks = Column(Integer, default=0)
     current_traffic_count = Column(Integer, default=0)  # 현재까지 완료된 트래픽 수
+    assigned_bot_id = Column(String(36), nullable=True)  # 특정 봇에게만 할당 (1봇 = 1캠페인)
     success_tasks = Column(Integer, default=0)
     fail_tasks = Column(Integer, default=0)
 

@@ -69,14 +69,30 @@ async def get_task(
     if bot.status != "active":
         raise HTTPException(status_code=403, detail=f"Bot is {bot.status}, not active")
     
-    # 실행 중인 캠페인 조회 (status='active')
-    campaign_result = await session.execute(
+    # 이 봇에게 이미 할당된 캠페인이 있는지 확인
+    assigned_campaign_result = await session.execute(
         select(Campaign)
+        .where(Campaign.assigned_bot_id == bot_id)
         .where(Campaign.status == "active")
-        .order_by(Campaign.created_at.asc())  # 가장 먼저 시작된 캠페인
-        .limit(1)
     )
-    campaign = campaign_result.scalar_one_or_none()
+    campaign = assigned_campaign_result.scalar_one_or_none()
+    
+    # 할당된 캠페인이 없으면, 미할당 캠페인 중 하나를 할당
+    if not campaign:
+        unassigned_campaign_result = await session.execute(
+            select(Campaign)
+            .where(Campaign.status == "active")
+            .where(Campaign.assigned_bot_id.is_(None))
+            .order_by(Campaign.created_at.asc())
+            .limit(1)
+        )
+        campaign = unassigned_campaign_result.scalar_one_or_none()
+        
+        if campaign:
+            # 이 봇에게 캠페인 할당
+            campaign.assigned_bot_id = bot_id
+            bot.assigned_campaign_id = campaign.campaign_id
+            await session.commit()
     
     if not campaign:
         # 실행 중인 캠페인이 없으면 대기 명령 반환
@@ -97,12 +113,14 @@ async def get_task(
         # 목표 달성 시 캠페인 종료
         campaign_locked.status = "completed"
         campaign_locked.completed_at = datetime.utcnow()
+        campaign_locked.assigned_bot_id = None  # 봇 할당 해제
+        bot.assigned_campaign_id = None  # 봇의 캠페인 할당도 해제
         await session.commit()
         
-        # 다음 캠페인 조회 (재귀 호출 대신 대기 명령)
+        # 이 봇에게 새로운 캠페인 할당 가능하도록 대기 명령 반환
         return TaskResponse(
             task_id="wait",
-            pattern=[{"action": "wait", "duration": 300000, "description": "캠페인 종료, 대기 (5분)"}]
+            pattern=[{"action": "wait", "duration": 10000, "description": "캠페인 완료, 다음 캠페인 대기 (10초)"}]
         )
     
     # 그룹 확인
