@@ -300,26 +300,27 @@ Control Tower Agent
 
 ## 📊 순위 변화 감지 시스템
 
-### 1. 순위 변화 기준
+### 1. 순위 변화 기준 (v2.0)
 
 | 기준 | 설명 | 조치 |
 |------|------|------|
-| **유의미한 개선** | 순위 개선 ≥ 1위 | ✅ 변수 저장 + 별도 테스트 |
-| **미미한 개선** | 0.5위 ≤ 순위 개선 < 1위 | ⚠️ 관찰 |
-| **변화 없음** | -0.5위 < 순위 개선 < 0.5위 | ❌ 무시 |
-| **순위 하락** | 순위 개선 < -0.5위 | 🔴 실패 분석 |
+| **유의미한 개선** | 100회 트래픽 작업 후 50위 이상 순위 상승 | ✅ 변수 저장 + 별도 테스트 |
+| **미미한 개선** | 100회 트래픽 작업 후 10~49위 순위 상승 | ⚠️ 관찰 |
+| **변화 없음** | 100회 트래픽 작업 후 -10~9위 순위 변동 | ❌ 무시 |
+| **순위 하락** | 100회 트래픽 작업 후 10위 이상 순위 하락 | 🔴 실패 분석 |
 
 ---
 
 ### 2. 순위 변화 감지 로직
 
 ```python
-class RankingChangeDetector:
+class RankingChangeDetectorV2:
     def __init__(self):
-        self.threshold_significant = 1.0  # 유의미한 개선 기준
-        self.threshold_minor = 0.5  # 미미한 개선 기준
+        self.threshold_significant = 50.0  # 유의미한 개선: 50위 이상 상승
+        self.threshold_minor = 10.0  # 미미한 개선: 10위 이상 상승
+        self.required_traffic_count = 100  # 필수 트래픽 작업 횟수
     
-    def detect_change(self, initial_rank: float, current_rank: float) -> dict:
+    def detect_change(self, initial_rank: float, current_rank: float, traffic_count: int) -> dict:
         """
         순위 변화 감지
         
@@ -334,7 +335,15 @@ class RankingChangeDetector:
                 "action": "save_and_test"  # "save_and_test", "observe", "ignore", "analyze_failure"
             }
         """
-        change = initial_rank - current_rank  # 7.25 - 6.00 = 1.25
+        if traffic_count < self.required_traffic_count:
+            return {
+                "change": 0,
+                "type": "pending",
+                "action": "wait",
+                "traffic_count": traffic_count
+            }
+        
+        change = initial_rank - current_rank
         
         if change >= self.threshold_significant:
             return {
@@ -470,8 +479,8 @@ CREATE INDEX idx_significant_variables_test_status ON significant_variables(test
    └─ 30분: 최종 순위 체크
    ↓
 결과 분석
-   ├─ 순위 개선 ≥ 1위 → ✅ 확인 (confirmed)
-   └─ 순위 개선 < 1위 → ❌ 거부 (rejected)
+   ├─ 순위 개선 ≥ 50위 → ✅ 확인 (confirmed)
+   └─ 순위 개선 < 50위 → ❌ 거부 (rejected)
    ↓
 변수 상태 업데이트
    ├─ confirmed → 향후 캠페인에서 우선 사용
@@ -538,7 +547,7 @@ class SignificantVariableTester:
                 # 2-4. 결과 분석
                 result = await self.control_tower.get_campaign_result(test_campaign_id)
                 
-                if result["ranking_change"] >= 1.0:
+                if result["ranking_change"] >= 50.0:
                     # 확인 (confirmed)
                     await self.db.execute(
                         """

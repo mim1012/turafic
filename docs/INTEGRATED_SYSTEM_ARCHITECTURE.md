@@ -76,6 +76,7 @@ graph TD
     - 캠페인 생성: 플랫폼, **Mall Subtype(단일/가격비교)**, 키워드, ProductID 입력
     - 실시간 모니터링: WebSocket을 통한 봇 상태, 순위 변화, 이벤트 로그 확인
     - 결과 분석: 순위 변화 그래프(`ΔRank vs Reliability`), `confirmed` 변수 현황, 가중치 변화 추적
+    - **관리자 뷰**: 순위 변동 이력 상세 분석 (트래픽 횟수별 그래프, 유의미한 개선 이벤트 목록 등)
 
 ### 2.2. Layer 2: 🧩 Control Tower
 - **역할**: 시스템의 두뇌로서, 모든 작업을 총괄하고 오케스트레이션합니다.
@@ -101,13 +102,13 @@ graph TD
     - **광고 필터 정규화**: `Reference Dataset`을 기반으로 광고 필터링의 정확도를 보정합니다.
     - **데이터 분류**: `reliability_score`를 기준으로 데이터를 분류하여, 신뢰도 높은 데이터는 `Validation & Analytics Layer`로, 불안정한(`unstable`) 데이터는 `ranking_anomalies` 큐로 보냅니다.
 
-### 2.5. Layer 5: 📊 Validation & Analytics (⭐ 신규)
+### 2.5. Layer 5: 📊 Validation & Analytics (⭐ v2.0)
 - **역할**: 정규화된 순위 데이터를 심층 분석하여 유의미한 순위 변화(`ΔRank`)를 감지합니다.
 - **구성 요소**: FastAPI 기반 Analytics & Validator 모듈
 - **주요 기능**:
     - **ΔRank 계산**: 최근 3회 측정치의 중앙값과 가중 평균을 사용하여 `ΔRank`를 계산합니다.
     - **플랫폼별 오차보정**: 네이버(±1), 쿠팡(±1.5) 등 플랫폼별 순위 집계 오차를 보정합니다.
-    - **유의미한 변화 감지**: `reliability ≥ 0.8`이고 `ΔRank ≥ 1.0`인 경우, '유의미한 변화'로 판정하고 해당 변수 조합을 `significant_variables` 테이블에 저장합니다.
+    - **유의미한 변화 감지 (v2.0)**: **100회 트래픽 작업 완료 후**, `reliability ≥ 0.8`이고 **`ΔRank ≥ 50`**인 경우, '유의미한 변화'로 판정하고 해당 변수 조합을 `significant_variables` 테이블에 저장합니다.
     - **피드백 전송**: 분석 결과를 Control Tower로 전송하여 피드백 루프를 완성합니다.
 
 ### 2.6. Layer 6: 🧠 Feedback & Learning (⭐ 신규)
@@ -125,7 +126,7 @@ graph TD
 
 | 테이블명 | 역할 |
 |---|---|
-| `ranking_history` | 모든 봇의 원시 순위 측정 기록 (3회 샘플, reliability_score 포함) |
+| `ranking_history` | 모든 봇의 원시 순위 측정 기록 (트래픽 작업 횟수, 3회 샘플, reliability_score 포함) |
 | `ranking_validated` | 신뢰도 검증(reliability ≥ 0.8)을 통과한 정제된 순위 데이터 |
 | `ranking_anomalies` | 신뢰도가 낮거나(`unstable`) 노이즈로 판정된 데이터 큐 |
 | `variable_weights` | `confirmed` 변수의 가중치를 관리 (변수 조합, 가중치, 사용 횟수 등) |
@@ -155,7 +156,7 @@ sequenceDiagram
     RankingObserver->>Database: 6. ranking_history에 저장
     RankingObserver->>Validator: 7. 정제된 데이터 전송 (reliability ≥ 0.8)
     Validator->>Validator: 8. ΔRank 계산 (중앙값+가중평균, 오차보정)
-    alt 유의미한 순위 변화 (ΔRank ≥ 1.0)
+    alt 100회 트래픽 완료 & 유의미한 순위 변화 (ΔRank ≥ 50)
         Validator->>Database: 9. significant_variables에 저장 (status: pending)
     end
     Validator->>ControlTower: 10. 분석 결과 피드백
