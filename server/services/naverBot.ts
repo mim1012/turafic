@@ -14,14 +14,6 @@ import { Task, Campaign } from "../../drizzle/schema";
 import { KeywordItem } from "./zeroApiClient";
 import { generateHeaders, buildSearchUrl, calculateDelay } from "./httpEngine";
 
-// Optional Puppeteer import
-let puppeteer: any = null;
-try {
-  puppeteer = require("puppeteer");
-} catch (e) {
-  console.warn("Puppeteer not installed. Using HTTP-only mode.");
-}
-
 type Browser = any;
 type Page = any;
 
@@ -34,43 +26,78 @@ export class NaverShoppingBot {
   private browser: Browser | null = null;
   private page: Page | null = null;
   private usePuppeteer: boolean = false;
+  private puppeteer: any = null;
+  private mode: "puppeteer" | "http" | "advanced-http" = "http";
 
-  constructor(usePuppeteer: boolean = false) {
-    this.usePuppeteer = usePuppeteer && puppeteer !== null;
+  constructor(usePuppeteer: boolean = false, mode?: "puppeteer" | "http" | "advanced-http") {
+    this.usePuppeteer = usePuppeteer;
+
+    // 모드 설정
+    if (mode) {
+      this.mode = mode;
+    } else if (usePuppeteer) {
+      this.mode = "puppeteer";
+    } else {
+      this.mode = "http";
+    }
+  }
+
+  /**
+   * Set HTTP mode
+   */
+  setMode(mode: "puppeteer" | "http" | "advanced-http"): void {
+    this.mode = mode;
+    console.log(`✅ Mode set to: ${mode}`);
   }
 
   /**
    * Initialize bot (Puppeteer mode only)
    */
   async init(): Promise<void> {
-    if (!this.usePuppeteer || !puppeteer) {
+    if (!this.usePuppeteer) {
       console.log("NaverBot initialized in HTTP-only mode");
       return;
     }
 
-    this.browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-accelerated-2d-canvas",
-        "--disable-gpu",
-        "--window-size=360,640",
-      ],
-    });
+    // Try to dynamically import puppeteer (ESM compatible)
+    try {
+      this.puppeteer = (await import("puppeteer")).default;
+      console.log("✅ Puppeteer loaded successfully");
+    } catch (e) {
+      console.warn("⚠️  Puppeteer not installed. Falling back to HTTP-only mode.");
+      this.usePuppeteer = false;
+      return;
+    }
 
-    this.page = await this.browser.newPage();
+    try {
+      this.browser = await this.puppeteer.launch({
+        headless: true,
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-accelerated-2d-canvas",
+          "--disable-gpu",
+          "--window-size=360,640",
+        ],
+      });
 
-    // Mobile viewport
-    await this.page.setViewport({
-      width: 360,
-      height: 640,
-      isMobile: true,
-      hasTouch: true,
-    });
+      this.page = await this.browser.newPage();
 
-    console.log("NaverBot initialized with Puppeteer");
+      // Mobile viewport
+      await this.page.setViewport({
+        width: 360,
+        height: 640,
+        isMobile: true,
+        hasTouch: true,
+      });
+
+      console.log("✅ NaverBot initialized with Puppeteer (headless Chrome)");
+    } catch (error: any) {
+      console.error("❌ Failed to launch Puppeteer:", error.message);
+      this.usePuppeteer = false;
+      console.log("Falling back to HTTP-only mode");
+    }
   }
 
   /**
@@ -86,10 +113,22 @@ export class NaverShoppingBot {
     campaign: Campaign,
     keywordData: KeywordItem
   ): Promise<number> {
-    if (this.usePuppeteer && this.page) {
-      return this.checkRankWithPuppeteer(task, campaign, keywordData);
-    } else {
-      return this.checkRankWithHttp(task, campaign, keywordData);
+    // Mode에 따라 다른 메서드 호출
+    switch (this.mode) {
+      case "puppeteer":
+        if (this.page) {
+          return this.checkRankWithPuppeteer(task, campaign, keywordData);
+        } else {
+          console.warn("⚠️  Puppeteer not initialized, falling back to advanced-http");
+          return this.checkRankWithAdvancedHttp(task, campaign, keywordData);
+        }
+
+      case "advanced-http":
+        return this.checkRankWithAdvancedHttp(task, campaign, keywordData);
+
+      case "http":
+      default:
+        return this.checkRankWithHttp(task, campaign, keywordData);
     }
   }
 
@@ -102,6 +141,10 @@ export class NaverShoppingBot {
     keywordData: KeywordItem
   ): Promise<number> {
     if (!this.page) throw new Error("Puppeteer page not initialized");
+
+    console.log(`🔍 Starting Puppeteer rank check...`);
+    console.log(`   Keyword: ${campaign.keyword}`);
+    console.log(`   Product ID: ${campaign.productId}`);
 
     // Set headers
     const headers = generateHeaders(task, keywordData);
@@ -130,27 +173,76 @@ export class NaverShoppingBot {
 
     while (currentPage <= maxPages) {
       const searchUrl = buildSearchUrl(campaign.keyword, currentPage);
+      console.log(`📄 Page ${currentPage}: Loading ${searchUrl.substring(0, 80)}...`);
+
       await this.page.goto(searchUrl, { waitUntil: "networkidle2" });
+
+      // Wait for content to load
+      await this.delay(2000); // Extra wait for dynamic content
 
       // Delay based on lowDelay variable
       await this.delay(calculateDelay(task.lowDelay));
+
+      // Debug: Check if page loaded successfully
+      const pageTitle = await this.page.title();
+      console.log(`   Page title: ${pageTitle}`);
+
+      // Debug: Extract first product nvMid from each page (first 3 pages only)
+      if (currentPage <= 3) {
+        const firstProduct = await this.page.evaluate(() => {
+          const links = Array.from(document.querySelectorAll('a[href*="nvMid="]'));
+          if (links.length > 0) {
+            const href = (links[0] as HTMLAnchorElement).href;
+            const match = href.match(/nvMid=(\d+)/);
+            return match ? match[1] : null;
+          }
+          return null;
+        });
+
+        if (firstProduct) {
+          const absoluteRank = (currentPage - 1) * 40 + 1;
+          console.log(`   First product on page ${currentPage}: nvMid=${firstProduct} (rank ${absoluteRank})`);
+        }
+      }
 
       // Find product rank
       const rank = await this.findProductRankInPage(campaign.productId, currentPage);
 
       if (rank > 0) {
+        console.log(`✅ Found product at rank ${rank}!`);
         return rank;
       }
 
+      console.log(`   Product not found on page ${currentPage}`);
+
       // Check if next page exists
       const hasNext = await this.hasNextPage();
+
+      // Debug: Check pagination elements (first page only)
+      if (currentPage === 1) {
+        const paginationInfo = await this.page.evaluate(() => {
+          // Find all elements with "next" or "paginat" in class
+          const nextElements = Array.from(document.querySelectorAll('[class*="next"]'));
+          const paginatElements = Array.from(document.querySelectorAll('[class*="paginat"]'));
+
+          return {
+            nextClasses: nextElements.map((el: any) => el.className),
+            paginatClasses: paginatElements.map((el: any) => el.className),
+          };
+        });
+        console.log(`   Next button classes:`, paginationInfo.nextClasses);
+        console.log(`   Pagination classes:`, paginationInfo.paginatClasses);
+      }
+
       if (!hasNext) {
+        console.log(`   No more pages available`);
         break;
       }
 
       currentPage++;
     }
 
+    console.log(`❌ Product not found in ${currentPage} pages`);
     return -1; // Not found
   }
 
@@ -164,13 +256,168 @@ export class NaverShoppingBot {
     campaign: Campaign,
     keywordData: KeywordItem
   ): Promise<number> {
-    // Note: In production, this would use the actual Android APK
-    // For now, return a mock result
-    console.log(`HTTP-only rank check for: ${campaign.keyword}`);
-    console.log(`Product ID: ${campaign.productId}`);
-    console.log(`Variables: uaChange=${task.uaChange}, shopHome=${task.shopHome}`);
+    const axios = (await import("axios")).default;
 
-    // Mock rank (would be replaced by actual Android APK call)
+    console.log(`🔍 HTTP-only rank check for: ${campaign.keyword}`);
+    console.log(`📦 Product ID: ${campaign.productId}`);
+
+    // Generate headers (zru12 HttpEngine.genHeader() logic)
+    const headers = generateHeaders(task, keywordData);
+
+    console.log(`🔧 Headers generated with 10 variables`);
+
+    // Search up to 10 pages (400 products)
+    const maxPages = 10;
+    const productsPerPage = 40;
+
+    for (let currentPage = 1; currentPage <= maxPages; currentPage++) {
+      try {
+        const searchUrl = buildSearchUrl(campaign.keyword, currentPage);
+        console.log(`🌐 Page ${currentPage}: ${searchUrl}`);
+
+        // Make HTTP request with generated headers
+        const response = await axios.get(searchUrl, {
+          headers,
+          timeout: 15000,
+          validateStatus: (status) => status < 500, // Accept 4xx responses
+        });
+
+        if (response.status !== 200) {
+          console.log(`⚠️  Page ${currentPage}: HTTP ${response.status}`);
+          continue;
+        }
+
+        const html = response.data;
+
+        // Find product in HTML (multiple patterns)
+        const productPatterns = [
+          new RegExp(`data-product-id="${campaign.productId}"`, "i"),
+          new RegExp(`data-nv-mid="${campaign.productId}"`, "i"),
+          new RegExp(`nvMid=${campaign.productId}`, "i"),
+          new RegExp(`mid=${campaign.productId}`, "i"),
+        ];
+
+        let found = false;
+        for (const pattern of productPatterns) {
+          if (pattern.test(html)) {
+            found = true;
+            break;
+          }
+        }
+
+        if (found) {
+          // Extract position within page (rough estimation)
+          const beforeProduct = html.substring(0, html.indexOf(campaign.productId));
+          const productCount = (beforeProduct.match(/class="[^"]*product[^"]*"/gi) || []).length;
+
+          const positionInPage = productCount > 0 ? productCount : 1;
+          const absoluteRank = (currentPage - 1) * productsPerPage + positionInPage;
+
+          console.log(`✅ Found at page ${currentPage}, position ${positionInPage} → Rank ${absoluteRank}`);
+          return absoluteRank;
+        }
+
+        console.log(`❌ Page ${currentPage}: Product not found`);
+
+        // Delay between pages (based on lowDelay variable)
+        const delayMs = calculateDelay(task.lowDelay);
+        await this.delay(delayMs);
+
+      } catch (error: any) {
+        console.error(`❌ Page ${currentPage} error:`, error.message);
+        // Continue to next page on error
+      }
+    }
+
+    console.log(`❌ Product not found in ${maxPages} pages (400 products)`);
+    return -1;
+  }
+
+  /**
+   * Check rank using Advanced HTTP (더 정교한 헤더로 봇 탐지 우회)
+   *
+   * 기존 checkRankWithHttp()보다 실제 Chrome Mobile과 더 유사한 헤더를 사용합니다.
+   */
+  private async checkRankWithAdvancedHttp(
+    task: Task,
+    campaign: Campaign,
+    keywordData: KeywordItem
+  ): Promise<number> {
+    const { AdvancedHttpClient } = await import("./httpClient");
+    const {
+      generateAdvancedHeaders,
+      buildAdvancedSearchUrl,
+      calculateAdvancedDelay,
+    } = await import("./advancedHttpEngine");
+
+    console.log(`🚀 Advanced HTTP mode: Starting rank check`);
+    console.log(`   Keyword: ${campaign.keyword}`);
+    console.log(`   Product ID: ${campaign.productId}`);
+
+    const client = new AdvancedHttpClient();
+    const headers = generateAdvancedHeaders(task, keywordData);
+
+    console.log(`🔧 Advanced headers generated with 10 variables`);
+    console.log(`   User-Agent: ${headers["user-agent"]?.substring(0, 50)}...`);
+    console.log(`   sec-ch-ua-mobile: ${headers["sec-ch-ua-mobile"]}`);
+    console.log(`   sec-fetch-site: ${headers["sec-fetch-site"]}`);
+    console.log(`   Referer: ${headers["referer"] || "(none)"}`);
+
+    const maxPages = 10;
+    const productsPerPage = 40;
+
+    for (let currentPage = 1; currentPage <= maxPages; currentPage++) {
+      try {
+        const searchUrl = buildAdvancedSearchUrl(campaign.keyword, currentPage);
+        console.log(`📄 Page ${currentPage}: ${searchUrl.substring(0, 80)}...`);
+
+        // Advanced HTTP request
+        const { status, data: html } = await client.get(searchUrl, headers);
+
+        if (status !== 200) {
+          console.log(`⚠️  Page ${currentPage}: HTTP ${status}`);
+
+          // HTTP 418이면 봇 탐지된 것
+          if (status === 418) {
+            console.log(`❌ Bot detected (HTTP 418) - Advanced headers failed`);
+          }
+
+          continue;
+        }
+
+        console.log(`✅ Page ${currentPage}: HTTP 200 (${html.length} bytes)`);
+
+        // Find product using nvMid
+        const nvMidPattern = new RegExp(`nvMid=${campaign.productId}`, "i");
+
+        if (nvMidPattern.test(html)) {
+          // Extract all nvMid links
+          const nvMidMatches = html.match(/nvMid=(\d+)/g) || [];
+
+          // Find position
+          const position = nvMidMatches.findIndex((match) =>
+            match.includes(campaign.productId)
+          );
+
+          if (position >= 0) {
+            const absoluteRank = (currentPage - 1) * productsPerPage + position + 1;
+            console.log(`✅ Found product at rank ${absoluteRank}!`);
+            return absoluteRank;
+          }
+        }
+
+        console.log(`   Product not found on page ${currentPage}`);
+
+        // Delay between pages
+        const delayMs = calculateAdvancedDelay(task.lowDelay);
+        await this.delay(delayMs);
+
+      } catch (error: any) {
+        console.error(`❌ Page ${currentPage} error:`, error.message);
+      }
+    }
+
+    console.log(`❌ Product not found in ${maxPages} pages`);
     return -1;
   }
 
@@ -184,28 +431,32 @@ export class NaverShoppingBot {
     if (!this.page) return -1;
 
     const position = await this.page.evaluate((pid: string) => {
-      // Multiple selector patterns for product ID
-      const selectors = [
+      // Find all nvMid links (네이버 쇼핑 검색 결과는 nvMid를 사용)
+      const links = Array.from(document.querySelectorAll('a[href*="nvMid="]'));
+
+      // Find the index of the link containing our product ID
+      for (let i = 0; i < links.length; i++) {
+        const href = (links[i] as HTMLAnchorElement).href;
+        if (href.includes(`nvMid=${pid}`)) {
+          return i + 1; // 1-based index
+        }
+      }
+
+      // Fallback: try other patterns
+      const fallbackSelectors = [
         `[data-product-id="${pid}"]`,
         `[data-nv-mid="${pid}"]`,
-        `a[href*="nvMid=${pid}"]`,
         `a[href*="mid=${pid}"]`,
       ];
 
-      // Try each selector
-      for (const selector of selectors) {
+      for (const selector of fallbackSelectors) {
         const productNode = document.querySelector(selector);
-
         if (productNode) {
-          // Find all product items
-          const allProducts = document.querySelectorAll(
-            ".product_item, .product__item, [class*='product']"
-          );
-
-          // Find position
+          // Count products before this one
+          const allProducts = document.querySelectorAll('[class*="product"]');
           for (let i = 0; i < allProducts.length; i++) {
             if (allProducts[i].contains(productNode)) {
-              return i + 1; // 1-based index
+              return i + 1;
             }
           }
         }
@@ -215,7 +466,7 @@ export class NaverShoppingBot {
     }, productId);
 
     if (position > 0) {
-      // Calculate absolute rank across pages
+      // Calculate absolute rank across pages (40 products per page)
       return (currentPage - 1) * 40 + position;
     }
 
@@ -229,10 +480,16 @@ export class NaverShoppingBot {
     if (!this.page) return false;
 
     return this.page.evaluate(() => {
-      const nextButton = document.querySelector(
-        ".paginator_btn_next:not(.paginator_disabled), .pagination_next:not(.disabled)"
-      );
-      return nextButton !== null;
+      // Find next button (CSS module class with hash)
+      const nextButton = document.querySelector('[class*="paginator_btn_next"]');
+
+      if (!nextButton) return false;
+
+      // Check if disabled
+      const isDisabled = nextButton.className.includes('paginator_disabled') ||
+                         nextButton.className.includes('disabled');
+
+      return !isDisabled;
     });
   }
 

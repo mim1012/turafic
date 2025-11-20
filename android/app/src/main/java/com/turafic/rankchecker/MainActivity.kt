@@ -8,8 +8,7 @@ import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import com.turafic.rankchecker.checker.NaverRankChecker
-import com.turafic.rankchecker.checker.WebViewManager
+import com.turafic.rankchecker.checker.NaverHttpRankChecker
 import com.turafic.rankchecker.network.TuraficApiClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -23,7 +22,7 @@ import java.util.*
 class MainActivity : AppCompatActivity() {
 
     private lateinit var apiClient: TuraficApiClient
-    private lateinit var webView: WebView
+    private lateinit var httpRankChecker: NaverHttpRankChecker
     private lateinit var statusTextView: TextView
     private lateinit var startButton: Button
 
@@ -39,18 +38,15 @@ class MainActivity : AppCompatActivity() {
         // UI 초기화
         statusTextView = findViewById(R.id.statusTextView)
         startButton = findViewById(R.id.startButton)
-        webView = findViewById(R.id.webView)
 
-        // API 클라이언트 초기화
+        // API 클라이언트 및 순위 체커 초기화
         apiClient = TuraficApiClient()
+        httpRankChecker = NaverHttpRankChecker()
 
         // 버튼 클릭 리스너
         startButton.setOnClickListener {
             startRankCheck()
         }
-
-        // WebView 디버깅 활성화
-        WebView.setWebContentsDebuggingEnabled(true)
 
         // 앱 시작 시 봇 등록
         registerBot()
@@ -144,25 +140,26 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * 순위 체크 실행
+     * 순위 체크 실행 (HTTP 패킷 기반)
+     *
+     * WebView 대신 순수 HTTP 요청으로 순위를 체크합니다.
+     * 실제 Android 디바이스에서 실행되므로 서버 기반보다 봇 탐지가 적습니다.
+     *
      * @param task 순위 체크 작업
      * @return 순위 (못 찾으면 -1)
      */
     private suspend fun performRankCheck(task: com.turafic.rankchecker.models.RankCheckTask): Int {
-        return withContext(Dispatchers.Main) {
-            updateStatus("순위 체크 중...")
+        updateStatus("순위 체크 중 (HTTP 패킷)...")
+        Log.i(TAG, "Using HTTP packet-based rank checker")
 
-            val webViewManager = WebViewManager(webView)
-            val rankChecker = NaverRankChecker(webView, webViewManager)
-
-            try {
-                val rank = rankChecker.checkRank(task)
-                Log.i(TAG, "Rank check completed: rank=$rank")
-                rank
-            } catch (e: Exception) {
-                Log.e(TAG, "performRankCheck error", e)
-                -1
-            }
+        return try {
+            val rank = httpRankChecker.checkRank(task)
+            Log.i(TAG, "Rank check completed: rank=$rank")
+            rank
+        } catch (e: Exception) {
+            Log.e(TAG, "performRankCheck error", e)
+            updateStatus("에러: ${e.message}")
+            -1
         }
     }
 

@@ -27,12 +27,23 @@
         android:text="@string/button_start_rank_check"
         android:textSize="16sp" />
 
-    <!-- WebView -->
-    <WebView
-        android:id="@+id/webView"
+    <!-- Log Output (HTTP 패킷 모드 - WebView 불필요) -->
+    <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:layout_marginTop="16dp" />
+        android:layout_marginTop="16dp"
+        android:background="@android:color/black">
+
+        <TextView
+            android:id="@+id/logTextView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="HTTP 패킷 기반 순위 체크\n순수 HTTP 요청 사용 (WebView 없음)\n\n로그가 여기에 표시됩니다..."
+            android:textColor="@android:color/white"
+            android:textSize="12sp"
+            android:fontFamily="monospace"
+            android:padding="8dp" />
+    </ScrollView>
 
 </LinearLayout>

@@ -62,6 +62,9 @@ dependencies {
     implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.7")
     implementation("io.ktor:ktor-client-logging:2.3.7")
 
+    // OkHttp (for packet-based rank checking)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
     // JSON Serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
 
