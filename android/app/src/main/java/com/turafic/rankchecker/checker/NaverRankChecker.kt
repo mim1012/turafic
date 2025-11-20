@@ -27,6 +27,7 @@ class NaverRankChecker(
         Log.i(TAG, "Keyword: ${task.keyword}")
         Log.i(TAG, "Product ID: ${task.productId}")
         Log.i(TAG, "User-Agent: ${task.variables.userAgent.take(50)}...")
+        Log.i(TAG, "Referer: ${task.variables.referer}")
 
         try {
             // 1. WebView 초기화
@@ -39,8 +40,8 @@ class NaverRankChecker(
                 val url = buildSearchUrl(task.keyword, page)
                 Log.d(TAG, "URL: $url")
 
-                // 페이지 로드
-                webViewManager.loadUrl(url)
+                // 페이지 로드 (Referer 헤더 포함)
+                webViewManager.loadUrl(url, task.variables.referer)
                 webViewManager.waitForPageLoad()
 
                 // 로드 후 대기

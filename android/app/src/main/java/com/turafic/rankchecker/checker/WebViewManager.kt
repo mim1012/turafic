@@ -101,11 +101,20 @@ class WebViewManager(private val webView: WebView) {
     /**
      * URL 로드
      * @param url 로드할 URL
+     * @param referer Referer 헤더 (선택)
      */
-    fun loadUrl(url: String) {
+    fun loadUrl(url: String, referer: String? = null) {
         pageLoadComplete = CompletableDeferred()
         Log.d(TAG, "Loading URL: $url")
-        webView.loadUrl(url)
+
+        if (referer != null) {
+            // Referer 헤더 설정
+            val headers = mapOf("Referer" to referer)
+            webView.loadUrl(url, headers)
+            Log.d(TAG, "Referer set: $referer")
+        } else {
+            webView.loadUrl(url)
+        }
     }
 
     /**
