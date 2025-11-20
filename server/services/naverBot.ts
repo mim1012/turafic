@@ -232,6 +232,10 @@ export class NaverShoppingBot {
 
       if (rank > 0) {
         console.log(`✅ Found product at rank ${rank}!`);
+
+        // ✨ work_type에 따른 추가 동작 (순위 체크 로직은 변동 없음)
+        await this.performTrafficAction(task, campaign, currentPage);
+
         return rank;
       }
 
@@ -618,6 +622,119 @@ export class NaverShoppingBot {
    */
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * 트래픽 생성 (work_type에 따른 추가 동작)
+   *
+   * 순위 체크 로직은 변동 없이, 순위를 찾은 후 work_type에 따라 추가 동작만 수행
+   *
+   * @param task Task with workType
+   * @param campaign Campaign details
+   * @param searchPage Current search page number (상품이 발견된 페이지)
+   */
+  private async performTrafficAction(
+    task: Task,
+    campaign: Campaign,
+    searchPage: number
+  ): Promise<void> {
+    if (!this.page) return;
+
+    const workType = task.workType;
+
+    // workType 매핑:
+    // 1 = '검색만' → 아무것도 안함 (순위 체크만)
+    // 2 = '검색+클릭' → 상품 페이지 접근
+    // 3 = '검색+클릭+체류' → 상품 페이지 접근 + 체류
+    // 4 = '리뷰조회' → 상품 페이지 접근 + 리뷰 페이지
+
+    if (workType === 1) {
+      console.log(`🔍 Work Type: 검색만 (트래픽 없음)`);
+      return; // 순위 체크만 하고 끝
+    }
+
+    console.log(`\n🚀 Starting traffic action (workType: ${workType})...`);
+
+    try {
+      // Step 1: 상품 링크 찾기
+      const productUrl = await this.page.evaluate((productId) => {
+        const links = Array.from(document.querySelectorAll('a[href*="nvMid="]'));
+        for (const link of links) {
+          const href = (link as HTMLAnchorElement).href;
+          if (href.includes(`nvMid=${productId}`)) {
+            return href;
+          }
+        }
+        return null;
+      }, campaign.productId);
+
+      if (!productUrl) {
+        console.log(`⚠️  상품 링크를 찾을 수 없습니다.`);
+        return;
+      }
+
+      console.log(`📦 상품 링크 발견: ${productUrl.substring(0, 80)}...`);
+
+      // Step 2: 상품 페이지로 이동 (workType >= 2)
+      if (workType >= 2) {
+        console.log(`🔗 상품 페이지 접근 중...`);
+
+        await this.page.goto(productUrl, {
+          waitUntil: "domcontentloaded",
+          timeout: 15000,
+        });
+
+        await this.delay(1000); // 페이지 로드 대기
+
+        const pageTitle = await this.page.title();
+        console.log(`✅ 상품 페이지 로드 완료: ${pageTitle}`);
+
+        // Step 3: 체류 (workType === 3)
+        if (workType === 3) {
+          const dwellTime = 5000; // 5초 체류
+          console.log(`⏳ 체류 중... (${dwellTime}ms)`);
+          await this.delay(dwellTime);
+          console.log(`✅ 체류 완료`);
+        }
+
+        // Step 4: 리뷰 페이지 접근 (workType === 4)
+        if (workType === 4) {
+          console.log(`📝 리뷰 페이지 찾는 중...`);
+
+          const reviewUrl = await this.page.evaluate(() => {
+            const reviewLinks = Array.from(document.querySelectorAll("a"));
+            for (const link of reviewLinks) {
+              if (
+                link.textContent?.includes("리뷰") ||
+                link.href?.includes("review")
+              ) {
+                return link.href;
+              }
+            }
+            return null;
+          });
+
+          if (reviewUrl) {
+            console.log(`📝 리뷰 페이지 접근: ${reviewUrl.substring(0, 80)}...`);
+
+            await this.page.goto(reviewUrl, {
+              waitUntil: "domcontentloaded",
+              timeout: 15000,
+            });
+
+            await this.delay(2000); // 리뷰 페이지 체류
+            console.log(`✅ 리뷰 페이지 완료`);
+          } else {
+            console.log(`⚠️  리뷰 링크를 찾을 수 없습니다.`);
+          }
+        }
+      }
+
+      console.log(`✅ 트래픽 동작 완료\n`);
+    } catch (error: any) {
+      console.log(`⚠️  트래픽 동작 실패: ${error.message}\n`);
+      // 에러가 나도 순위는 이미 찾았으므로 계속 진행
+    }
   }
 
   /**
