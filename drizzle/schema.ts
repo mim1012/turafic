@@ -13,6 +13,8 @@ export const campaignStatusEnum = pgEnum("campaign_status", ["active", "paused",
 export const botRoleEnum = pgEnum("bot_role", ["leader", "follower", "rank_checker"]);
 export const botStatusEnum = pgEnum("bot_status", ["online", "offline", "error"]);
 export const variableStatusEnum = pgEnum("variable_status", ["new", "testing", "elite", "significant", "deprecated"]);
+export const taskStatusEnum = pgEnum("task_status", ["pending", "running", "completed", "failed"]);
+export const logLevelEnum = pgEnum("log_level", ["info", "warning", "error"]);
 
 export const users = pgTable("users", {
   /**
@@ -92,3 +94,62 @@ export const rankings = pgTable("rankings", {
 
 export type Ranking = typeof rankings.$inferSelect;
 export type InsertRanking = typeof rankings.$inferInsert;
+
+// Tasks table (10 variables from Zero API)
+export const tasks = pgTable("tasks", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  campaignId: integer("campaignId").notNull(),
+  keywordId: integer("keywordId"),
+  trafficId: integer("trafficId"),
+
+  // 10 variables (Zero API format)
+  uaChange: integer("uaChange").notNull().default(1),
+  cookieHomeMode: integer("cookieHomeMode").notNull().default(1),
+  shopHome: integer("shopHome").notNull().default(1),
+  useNid: integer("useNid").notNull().default(0),
+  useImage: integer("useImage").notNull().default(1),
+  workType: integer("workType").notNull().default(3),
+  randomClickCount: integer("randomClickCount").notNull().default(2),
+  workMore: integer("workMore").notNull().default(1),
+  secFetchSiteMode: integer("secFetchSiteMode").notNull().default(1),
+  lowDelay: integer("lowDelay").notNull().default(2),
+
+  // Status and results
+  status: taskStatusEnum("status").default("pending").notNull(),
+  rank: integer("rank"),
+  errorMessage: text("errorMessage"),
+
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+
+export type Task = typeof tasks.$inferSelect;
+export type InsertTask = typeof tasks.$inferInsert;
+
+// Task Logs table (for debugging and monitoring)
+export const taskLogs = pgTable("taskLogs", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  taskId: integer("taskId").notNull(),
+  level: logLevelEnum("level").default("info").notNull(),
+  message: text("message").notNull(),
+  metadata: text("metadata"), // JSON string
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type TaskLog = typeof taskLogs.$inferSelect;
+export type InsertTaskLog = typeof taskLogs.$inferInsert;
+
+// Naver Cookies table (cookie pool management)
+export const naverCookies = pgTable("naverCookies", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  nnb: varchar("nnb", { length: 255 }).notNull(),
+  nidAut: varchar("nidAut", { length: 255 }),
+  nidSes: varchar("nidSes", { length: 255 }),
+  nidJkl: varchar("nidJkl", { length: 255 }),
+  isActive: integer("isActive").default(1).notNull(), // 1 = active, 0 = inactive
+  lastUsedAt: timestamp("lastUsedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type NaverCookie = typeof naverCookies.$inferSelect;
+export type InsertNaverCookie = typeof naverCookies.$inferInsert;
