@@ -9,6 +9,7 @@ import { getDb } from "../db";
 import { rankings, campaigns, bots } from "../../drizzle/schema";
 import type { InsertRanking } from "../../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { socketManager } from "./socketManager";
 
 /**
  * KeywordItem - Zero API 응답 형식
@@ -198,6 +199,17 @@ export async function assignTask(
     }
 
     console.log(`[RankCheckService] Task assigned to bot ${botId}: ${task.taskId}`);
+
+    // 7. Socket.io 이벤트 브로드캐스트 (작업 할당)
+    socketManager.broadcastTaskEvent({
+      taskId: parseInt(task.taskId.split('_')[1]) || 0,
+      campaignId: task.campaignId,
+      botId: botId.toString(),
+      type: "assigned",
+      timestamp: new Date().toISOString(),
+      details: `Keyword: ${task.keyword}`,
+    });
+
     return task;
 
   } catch (error) {
@@ -219,7 +231,16 @@ export async function reportRank(result: RankCheckResult): Promise<boolean> {
       return false;
     }
 
-    // 1. Turafic DB에 저장
+    // 1. 이전 순위 조회 (비교용)
+    const previousRanks = await db.select()
+      .from(rankings)
+      .where(eq(rankings.campaignId, result.campaignId))
+      .orderBy(rankings.timestamp)
+      .limit(1);
+
+    const previousRank = previousRanks.length > 0 ? previousRanks[0].rank : undefined;
+
+    // 2. Turafic DB에 저장
     const ranking: InsertRanking = {
       campaignId: result.campaignId,
       rank: result.rank,
@@ -232,7 +253,23 @@ export async function reportRank(result: RankCheckResult): Promise<boolean> {
 
     console.log(`[RankCheckService] Rank reported: Campaign ${result.campaignId}, Rank ${result.rank}`);
 
-    // 2. Zero API에도 보고 (선택 사항)
+    // 3. 캠페인 정보 조회 (키워드, 상품명)
+    const campaign = await db.select()
+      .from(campaigns)
+      .where(eq(campaigns.id, result.campaignId))
+      .limit(1);
+
+    // 4. Socket.io 이벤트 브로드캐스트
+    socketManager.broadcastRankUpdate({
+      campaignId: result.campaignId,
+      keyword: campaign.length > 0 ? campaign[0].keyword : "Unknown",
+      productName: campaign.length > 0 ? (campaign[0].productName || "Unknown Product") : "Unknown Product",
+      rank: result.rank,
+      previousRank,
+      timestamp: result.timestamp.toISOString(),
+    });
+
+    // 5. Zero API에도 보고 (선택 사항)
     // 실제 Zero API와 통합 시 활성화
     // await reportToZeroApi(result);
 
@@ -329,6 +366,18 @@ export async function updateBotStatus(
     const db = await getDb();
     if (!db) return false;
 
+    // 봇 정보 조회
+    const bot = await db.select()
+      .from(bots)
+      .where(eq(bots.id, botId))
+      .limit(1);
+
+    if (bot.length === 0) {
+      console.error(`[RankCheckService] Bot not found: ${botId}`);
+      return false;
+    }
+
+    // 봇 상태 업데이트
     await db.update(bots)
       .set({
         status,
@@ -337,6 +386,16 @@ export async function updateBotStatus(
       .where(eq(bots.id, botId));
 
     console.log(`[RankCheckService] Bot status updated: ${botId} → ${status}`);
+
+    // Socket.io 이벤트 브로드캐스트
+    socketManager.broadcastBotStatus({
+      botId: botId.toString(),
+      botName: bot[0].deviceId || `Bot ${botId}`,
+      status,
+      ip: bot[0].ip || undefined,
+      lastSeen: new Date().toISOString(),
+    });
+
     return true;
 
   } catch (error) {
