@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { client } from "@/lib/trpc";
+import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -13,39 +12,20 @@ import { toast } from "sonner";
 export default function ExperimentProducts() {
   const [isCollecting, setIsCollecting] = useState(false);
   const [keyword, setKeyword] = useState("");
-  const queryClient = useQueryClient();
 
   // 상품 개수 조회
-  const { data: productCount = 0 } = useQuery({
-    queryKey: ["experimentProducts", "count"],
-    queryFn: async () => {
-      const result = await client.experimentProducts.count.query();
-      return result;
-    },
-  });
+  const { data: productCount = 0 } = trpc.experimentProducts.count.useQuery();
 
   // 상품 목록 조회
-  const { data: products = [], isLoading } = useQuery({
-    queryKey: ["experimentProducts", "list"],
-    queryFn: async () => {
-      const result = await client.experimentProducts.list.query();
-      return result;
-    },
-  });
+  const { data: products = [], isLoading, refetch } = trpc.experimentProducts.list.useQuery();
 
   // 상품 수집 뮤테이션
-  const collectMutation = useMutation({
-    mutationFn: async (keyword: string) => {
-      return await client.experimentProducts.collect.mutate({
-        keyword,
-        targetCount: 100,
-      });
-    },
+  const collectMutation = trpc.experimentProducts.collect.useMutation({
     onSuccess: () => {
       toast.success("상품 수집 완료!", {
         description: "100개의 상품이 성공적으로 수집되었습니다.",
       });
-      queryClient.invalidateQueries({ queryKey: ["experimentProducts"] });
+      refetch();
       setIsCollecting(false);
     },
     onError: (error) => {
@@ -69,7 +49,7 @@ export default function ExperimentProducts() {
       description: `"${keyword}" 키워드로 201-300위 상품 100개를 수집합니다. 약 2-3분 소요됩니다.`,
       duration: 5000,
     });
-    collectMutation.mutate(keyword);
+    collectMutation.mutate({ keyword, targetCount: 100 });
   };
 
   return (

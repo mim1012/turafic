@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 interface ErrorEvent {
   source: string;
@@ -14,20 +14,28 @@ interface Props {
 }
 
 export function RealtimeErrorLog({ errors }: Props) {
-  const { toast } = useToast();
-
   // 새 에러 발생 시 Toast 알림
   useEffect(() => {
     if (errors.length > 0) {
       const latestError = errors[0];
 
       // Toast 알림 표시
-      toast({
-        variant: latestError.severity === "critical" ? "destructive" : "default",
-        title: `🚨 ${getSeverityName(latestError.severity)}`,
-        description: `[${latestError.source}] ${latestError.message}`,
-        duration: latestError.severity === "critical" ? 10000 : 5000,
-      });
+      if (latestError.severity === "critical") {
+        toast.error(`🚨 ${getSeverityName(latestError.severity)}`, {
+          description: `[${latestError.source}] ${latestError.message}`,
+          duration: 10000,
+        });
+      } else if (latestError.severity === "error") {
+        toast.error(`❌ ${getSeverityName(latestError.severity)}`, {
+          description: `[${latestError.source}] ${latestError.message}`,
+          duration: 5000,
+        });
+      } else {
+        toast.warning(`⚠️ ${getSeverityName(latestError.severity)}`, {
+          description: `[${latestError.source}] ${latestError.message}`,
+          duration: 5000,
+        });
+      }
     }
   }, [errors.length]); // errors.length 변경 시에만 실행
 
