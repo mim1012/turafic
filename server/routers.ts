@@ -273,7 +273,7 @@ export const appRouter = router({
   experimentProducts: router({
     collect: publicProcedure
       .input(z.object({
-        keyword: z.string().default("장난감"),
+        keyword: z.string().min(1, "키워드를 입력하세요"),
         targetCount: z.number().default(100),
       }))
       .mutation(async ({ input }) => {

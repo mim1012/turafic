@@ -5,12 +5,19 @@ import { experimentProducts, type InsertExperimentProduct } from "../../drizzle/
 /**
  * ProductCollector 클래스
  *
- * 목적: 네이버 쇼핑에서 200위권 상품 100개를 수집하여 실험에 사용
+ * 목적: 네이버 쇼핑에서 200-300위 상품 100개를 수집하여 실험에 사용
  *
  * 수집 전략:
- * - 키워드: "장난감"
- * - 수집 범위: 5-6페이지 (약 161-240위)
+ * - 키워드: 사용자 지정 가능
+ * - 수집 범위: 6-8페이지 (201-300위)
  * - 수집 개수: 100개
+ *
+ * 네이버 쇼핑 페이지네이션:
+ * - 한 페이지당 40개 상품
+ * - 5페이지: 161-200위
+ * - 6페이지: 201-240위
+ * - 7페이지: 241-280위
+ * - 8페이지: 281-320위
  */
 export class ProductCollector {
   private browser: Browser | null = null;
@@ -138,19 +145,19 @@ export class ProductCollector {
   }
 
   /**
-   * 100개 상품 수집 (5-6페이지)
+   * 100개 상품 수집 (6-8페이지, 201-300위)
    */
   async collectProducts(keyword: string, targetCount: number = 100): Promise<void> {
     console.log(`Starting product collection for keyword: "${keyword}"`);
-    console.log(`Target: ${targetCount} products from pages 5-6`);
+    console.log(`Target: ${targetCount} products from pages 6-8 (201-300 rank)`);
 
     await this.initialize();
     await this.searchKeyword(keyword);
 
     const allProducts: InsertExperimentProduct[] = [];
 
-    // 5-6페이지 수집
-    for (const pageNum of [5, 6]) {
+    // 6-8페이지 수집 (201-300위)
+    for (const pageNum of [6, 7, 8]) {
       console.log(`\nNavigating to page ${pageNum}...`);
       await this.goToPage(pageNum);
 
@@ -164,15 +171,15 @@ export class ProductCollector {
       }
     }
 
-    // 목표 개수만큼 자르기
+    // 목표 개수만큼 자르기 (정확히 100개)
     const finalProducts = allProducts.slice(0, targetCount);
 
-    // 위치 계산 (5페이지 시작 = 161위부터)
+    // 위치 계산 (6페이지 시작 = 201위부터)
     finalProducts.forEach((product, index) => {
-      product.position = 161 + index; // 5페이지 첫 번째 = 161위
+      product.position = 201 + index; // 6페이지 첫 번째 = 201위
     });
 
-    console.log(`\nTotal collected: ${finalProducts.length} products`);
+    console.log(`\nTotal collected: ${finalProducts.length} products (Rank 201-${200 + finalProducts.length})`);
 
     // 데이터베이스에 저장
     await this.saveToDatabase(finalProducts);

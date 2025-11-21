@@ -5,11 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Loader2, Package, Download, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ExperimentProducts() {
   const [isCollecting, setIsCollecting] = useState(false);
+  const [keyword, setKeyword] = useState("");
   const queryClient = useQueryClient();
 
   // 상품 개수 조회
@@ -32,9 +35,9 @@ export default function ExperimentProducts() {
 
   // 상품 수집 뮤테이션
   const collectMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (keyword: string) => {
       return await client.experimentProducts.collect.mutate({
-        keyword: "장난감",
+        keyword,
         targetCount: 100,
       });
     },
@@ -54,12 +57,19 @@ export default function ExperimentProducts() {
   });
 
   const handleCollectProducts = () => {
+    if (!keyword.trim()) {
+      toast.error("키워드를 입력하세요", {
+        description: "수집할 키워드를 입력해주세요.",
+      });
+      return;
+    }
+
     setIsCollecting(true);
     toast.info("상품 수집 시작", {
-      description: "네이버 쇼핑에서 200위권 상품 100개를 수집합니다. 약 2-3분 소요됩니다.",
+      description: `"${keyword}" 키워드로 201-300위 상품 100개를 수집합니다. 약 2-3분 소요됩니다.`,
       duration: 5000,
     });
-    collectMutation.mutate();
+    collectMutation.mutate(keyword);
   };
 
   return (
@@ -68,7 +78,7 @@ export default function ExperimentProducts() {
       <div>
         <h1 className="text-3xl font-bold mb-2">실험용 상품 수집</h1>
         <p className="text-muted-foreground">
-          100 Work Type 실험을 위한 네이버 쇼핑 200위권 상품 수집
+          100 Work Type 실험을 위한 네이버 쇼핑 201-300위 상품 수집 (키워드 자유 선택)
         </p>
       </div>
 
@@ -91,8 +101,8 @@ export default function ExperimentProducts() {
             <Download className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">161-260위</div>
-            <p className="text-xs text-muted-foreground">5-6페이지</p>
+            <div className="text-2xl font-bold">201-300위</div>
+            <p className="text-xs text-muted-foreground">6-8페이지</p>
           </CardContent>
         </Card>
 
@@ -125,13 +135,34 @@ export default function ExperimentProducts() {
         <CardHeader>
           <CardTitle>상품 수집</CardTitle>
           <CardDescription>
-            키워드 "장난감"으로 네이버 쇼핑 200위권 상품 100개를 자동으로 수집합니다.
+            원하는 키워드로 네이버 쇼핑 201-300위 상품 100개를 자동으로 수집합니다.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* 키워드 입력 */}
+          <div className="space-y-2">
+            <Label htmlFor="keyword">검색 키워드</Label>
+            <Input
+              id="keyword"
+              type="text"
+              placeholder="예: 장난감, 화장품, 노트북 등"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+              disabled={isCollecting || collectMutation.isPending}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleCollectProducts();
+                }
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              수집할 키워드를 입력하세요. 100개의 work_type과 1:1 매칭됩니다.
+            </p>
+          </div>
+
           <Button
             onClick={handleCollectProducts}
-            disabled={isCollecting || collectMutation.isPending}
+            disabled={isCollecting || collectMutation.isPending || !keyword.trim()}
             size="lg"
             className="w-full md:w-auto"
           >
@@ -149,7 +180,7 @@ export default function ExperimentProducts() {
           </Button>
 
           {productCount > 0 && (
-            <p className="text-sm text-muted-foreground mt-2">
+            <p className="text-sm text-muted-foreground">
               현재 {productCount}개의 상품이 수집되어 있습니다. 다시 수집하면 기존 데이터가 삭제됩니다.
             </p>
           )}
