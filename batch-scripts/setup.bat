@@ -85,7 +85,7 @@ echo [6/7] Installing project dependencies...
 echo This may take a few minutes on first run
 echo.
 
-call pnpm install --frozen-lockfile
+call pnpm install
 if %errorlevel% neq 0 (
     echo ERROR: Dependency installation failed
     pause
