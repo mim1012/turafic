@@ -1,33 +1,31 @@
 @echo off
 setlocal enabledelayedexpansion
 
-REM Environment Validation
+echo Checking Node.js...
 node --version >nul 2>&1
 if %errorlevel% neq 0 (
     echo ERROR: Node.js is not installed.
-    echo.
     echo Please run setup.bat first.
-    echo.
     pause
     exit /b 1
 )
 
+echo Changing to script directory...
 cd /d "%~dp0"
 cd ..
 
+echo Current directory: %CD%
+echo.
+
 if not exist ".env" (
     echo ERROR: .env file not found.
-    echo.
     echo Please run setup.bat first.
-    echo.
     pause
     exit /b 1
 )
 
-REM Create Log Directory
 if not exist "batch-scripts\logs" mkdir batch-scripts\logs
 
-REM Generate Timestamp
 for /f "tokens=1-3 delims=/ " %%a in ('date /t') do (
     set YEAR=%%a
     set MONTH=%%b
@@ -44,38 +42,31 @@ set MINUTE=%MINUTE: =0%
 set TIMESTAMP=%YEAR%%MONTH%%DAY%-%HOUR%%MINUTE%
 set LOG_FILE=rank-check-%TIMESTAMP%.log
 
-REM Execution Start
 echo ================================
-echo  Naver Rank Checker - Execute
+echo  Naver Rank Checker
 echo ================================
-echo Start time: %date% %time%
-echo Log file: batch-scripts\logs\%LOG_FILE%
-echo Current directory: %CD%
+echo Start: %date% %time%
+echo Log: batch-scripts\logs\%LOG_FILE%
 echo ================================
 echo.
 
-REM Execute Main Script
 call npx tsx rank-check/batch/check-batch-keywords.ts %* 2>&1 | tee batch-scripts\logs\%LOG_FILE%
 
 set EXIT_CODE=%errorlevel%
 
-REM Execution Result
 echo.
 echo ================================
 if %EXIT_CODE% equ 0 (
-    echo SUCCESS: Execution completed
+    echo SUCCESS
 ) else (
-    echo ERROR: Execution failed - code: %EXIT_CODE%
+    echo ERROR: Exit code %EXIT_CODE%
 )
 echo ================================
-echo End time: %date% %time%
-echo Log path: batch-scripts\logs\%LOG_FILE%
+echo End: %date% %time%
+echo Log: batch-scripts\logs\%LOG_FILE%
 echo ================================
 echo.
 
-REM Skip pause when running from Task Scheduler
-if "%1"=="" (
-    pause
-)
+if "%1"=="" pause
 
 exit /b %EXIT_CODE%

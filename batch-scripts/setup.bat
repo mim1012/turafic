@@ -4,66 +4,51 @@ echo  Naver Rank Checker - Setup
 echo ================================
 echo.
 
-REM Check Administrator Privileges
 echo [1/7] Checking administrator privileges...
 net session >nul 2>&1
 if %errorlevel% neq 0 (
-    echo.
     echo ERROR: Administrator privileges required.
-    echo.
     echo Please right-click this file and select "Run as administrator"
-    echo.
     pause
     exit /b 1
 )
-echo OK: Administrator privileges confirmed
+echo OK: Administrator confirmed
 echo.
 
-REM Check Node.js Installation
-echo [2/7] Checking Node.js installation...
+echo [2/7] Checking Node.js...
 node --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo.
     echo ERROR: Node.js is not installed.
-    echo.
-    echo Please download and install Node.js LTS from:
-    echo https://nodejs.org
-    echo.
-    echo After installation, run this script again.
-    echo.
+    echo Please install from https://nodejs.org
     start https://nodejs.org
     pause
     exit /b 1
 )
 
 for /f "tokens=*" %%i in ('node --version') do set NODE_VERSION=%%i
-echo OK: Node.js %NODE_VERSION% detected
+echo OK: Node.js %NODE_VERSION%
 echo.
 
-REM Install pnpm
-echo [3/7] Installing pnpm package manager...
+echo [3/7] Installing pnpm...
 call npm install -g pnpm
 if %errorlevel% neq 0 (
     echo ERROR: pnpm installation failed
     pause
     exit /b 1
 )
-echo OK: pnpm installed successfully
+echo OK: pnpm installed
 echo.
 
-REM Navigate to Project Directory
 echo [4/7] Navigating to project directory...
-echo Current dir before: %CD%
 cd /d "%~dp0"
 cd ..
-echo Current dir after: %CD%
+echo OK: %CD%
 echo.
 
-REM Create .env File
 echo [5/7] Creating .env file...
 
 if exist .env (
-    echo WARNING: .env file already exists. Overwriting...
+    echo WARNING: .env file exists. Overwriting...
     attrib -R .env 2>nul
 )
 
@@ -77,12 +62,11 @@ echo NODE_ENV=production >> .env
 
 attrib +R .env
 
-echo OK: .env file created successfully
+echo OK: .env created
 echo.
 
-REM Install Dependencies
-echo [6/7] Installing project dependencies...
-echo This may take a few minutes on first run
+echo [6/7] Installing dependencies...
+echo This may take several minutes
 echo.
 
 call pnpm install
@@ -91,35 +75,28 @@ if %errorlevel% neq 0 (
     pause
     exit /b 1
 )
-echo OK: Dependencies installed successfully
+echo OK: Dependencies installed
 echo.
 
-echo [6.1/7] Downloading Puppeteer Chromium...
-echo Approximately 200MB, downloaded once
+echo [6.1/7] Chromium download (optional)...
+echo You can skip this - it will download on first run
+echo Press Ctrl+C to skip, or wait...
 echo.
 
 call npx puppeteer browsers install chrome
 if %errorlevel% neq 0 (
-    echo ERROR: Chromium download failed
-    pause
-    exit /b 1
+    echo WARNING: Chromium download failed or skipped
+    echo Will download automatically on first run
+    echo.
 )
-echo OK: Chromium downloaded successfully
-echo.
 
-REM Run Initial Test
-echo [7/7] Running initial test...
-echo Testing with 1 keyword to verify setup
-echo.
-echo Current directory: %CD%
+echo [7/7] Initial test...
 echo.
 
 call npx tsx rank-check/batch/check-batch-keywords.ts --limit=1
 if %errorlevel% neq 0 (
-    echo.
-    echo WARNING: Initial test failed
-    echo Please check the error messages above.
-    echo.
+    echo WARNING: Test failed
+    echo Check errors above
     pause
     exit /b 1
 )
@@ -130,7 +107,7 @@ echo SUCCESS: Setup completed!
 echo ================================
 echo.
 echo Next steps:
-echo 1. Run run-rank-check.bat to process all keywords
-echo 2. Check README.txt for scheduling instructions
+echo 1. Run run-rank-check.bat
+echo 2. Check README.txt for scheduling
 echo.
 pause
