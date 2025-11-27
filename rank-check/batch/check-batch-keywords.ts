@@ -23,8 +23,8 @@ import { saveRankToSlotNaver, type KeywordRecord } from '../utils/save-rank-to-s
 import * as fs from 'fs';
 
 // 설정
-const BATCH_SIZE = 10; // 동시 처리 개수
-const BATCH_COOLDOWN_MS = 10000; // 배치 간 대기 시간 (10초)
+const BATCH_SIZE = 15; // 동시 처리 개수 (10 → 15 성능 향상)
+const BATCH_COOLDOWN_MS = 5000; // 배치 간 대기 시간 (10초 → 5초 성능 향상)
 const MAX_PAGES = 15; // 순위 체크 최대 페이지
 
 // Supabase 초기화
@@ -162,16 +162,50 @@ async function main() {
           console.log(`   ⚠️ 저장 실패: ${saveResult.error}`);
           failedCount++;
         } else {
-          // 저장 성공 시 keywords_navershopping에서 삭제
-          const { error: deleteError } = await supabase
-            .from('keywords_navershopping')
-            .delete()
-            .eq('id', keywordRecord.id);
+          // 성공 OR 실패(-1)인지 확인
+          const isFailed = !result.rank || result.rank.totalRank === -1;
 
-          if (deleteError) {
-            console.log(`   ⚠️ 키워드 삭제 실패: ${deleteError.message}`);
+          if (isFailed) {
+            // 실패 케이스
+            const currentRetryCount = keywordRecord.retry_count || 0;
+
+            if (currentRetryCount >= 1) {
+              // 1회 재시도 완료 → 삭제
+              const { error: deleteError } = await supabase
+                .from('keywords_navershopping')
+                .delete()
+                .eq('id', keywordRecord.id);
+
+              if (deleteError) {
+                console.log(`   ⚠️ 키워드 삭제 실패: ${deleteError.message}`);
+              } else {
+                console.log(`   ⛔ 재시도 한계 도달 - 대기열에서 삭제됨`);
+              }
+            } else {
+              // 재시도 카운트 증가 (삭제 X)
+              const { error: updateError } = await supabase
+                .from('keywords_navershopping')
+                .update({ retry_count: currentRetryCount + 1 })
+                .eq('id', keywordRecord.id);
+
+              if (updateError) {
+                console.log(`   ⚠️ 재시도 카운트 업데이트 실패: ${updateError.message}`);
+              } else {
+                console.log(`   🔄 재시도 예정 (${currentRetryCount + 1}/1) - 히스토리 미저장`);
+              }
+            }
           } else {
-            console.log(`   🗑️  작업 완료 - 대기열에서 삭제됨`);
+            // 성공 케이스 → 즉시 삭제
+            const { error: deleteError } = await supabase
+              .from('keywords_navershopping')
+              .delete()
+              .eq('id', keywordRecord.id);
+
+            if (deleteError) {
+              console.log(`   ⚠️ 키워드 삭제 실패: ${deleteError.message}`);
+            } else {
+              console.log(`   🗑️  작업 완료 - 대기열에서 삭제됨`);
+            }
           }
         }
 

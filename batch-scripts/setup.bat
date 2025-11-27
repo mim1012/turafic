@@ -45,27 +45,36 @@ cd ..
 echo OK: %CD%
 echo.
 
-echo [5/7] Creating .env file...
+echo [5/7] Checking .env file...
 
 if exist .env (
-    echo WARNING: .env file exists. Overwriting...
-    attrib -R .env 2>nul
+    echo OK: .env file already exists
+    echo     (Delete .env to recreate from template)
+    goto skip_env
 )
 
-echo SUPABASE_URL=https://cwsdvgkjptuvbdtxcejt.supabase.co > .env
-echo SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN3c2R2Z2tqcHR1dmJkdHhjZWp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzcwMjIwOTAsImV4cCI6MjA1MjU5ODA5MH0.Dh64z4HFe-qX3YkWYtRBLlAB0JdWqm_2w-U6NtbBJEs >> .env
-echo SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN3c2R2Z2tqcHR1dmJkdHhjZWp0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczNzAyMjA5MCwiZXhwIjoyMDUyNTk4MDkwfQ.zVWXFvPzhQQ1Y1hBQgkCm8KWmpOD47TZ-e9ZjWnfBQo >> .env
-echo DATABASE_URL=postgresql://postgres.cwsdvgkjptuvbdtxcejt:EGxhoDsQvygcwY5c@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres >> .env
-echo DIRECT_URL=postgresql://postgres:EGxhoDsQvygcwY5c@db.cwsdvgkjptuvbdtxcejt.supabase.co:5432/postgres >> .env
-echo DATABASE_PASSWORD=EGxhoDsQvygcwY5c >> .env
-echo NODE_ENV=production >> .env
-
-attrib +R .env
+echo Creating .env file...
+powershell -ExecutionPolicy Bypass -File "batch-scripts\create-env.ps1"
+if not exist .env (
+    echo ERROR: Failed to create .env
+    pause
+    exit /b 1
+)
 
 echo OK: .env created
+
+:skip_env
 echo.
 
-echo [6/7] Installing dependencies...
+echo [6/7] Checking dependencies...
+
+if exist "node_modules\" (
+    echo OK: node_modules exists, skipping installation
+    echo     (Delete node_modules folder to reinstall)
+    goto skip_install
+)
+
+echo Installing dependencies...
 echo This may take several minutes
 echo.
 
@@ -76,6 +85,8 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 echo OK: Dependencies installed
+
+:skip_install
 echo.
 
 echo [6.1/7] Chromium download (optional)...

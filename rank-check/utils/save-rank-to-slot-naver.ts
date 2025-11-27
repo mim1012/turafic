@@ -17,6 +17,8 @@ export interface KeywordRecord {
   slot_sequence?: number | null;
   slot_type?: string | null;
   customer_id?: string | null;
+  customer_name?: string | null;
+  retry_count?: number | null;
 }
 
 export interface RankResult {
@@ -57,6 +59,9 @@ export async function saveRankToSlotNaver(
     const pageNumber = rankResult?.page ?? null;
     const productName = rankResult?.productName ?? null;
     const mid = rankResult?.mid ?? null;
+
+    // ✅ -1인 경우 히스토리 저장 스킵
+    const shouldSaveHistory = currentRank !== -1;
 
     let slotRecord: any = null;
 
@@ -144,6 +149,7 @@ export async function saveRankToSlotNaver(
           slot_type: keyword.slot_type || '네이버쇼핑',
           slot_sequence: keyword.slot_sequence,
           customer_id: keyword.customer_id || 'master',
+          customer_name: keyword.customer_name || '기본고객',
           current_rank: currentRank,
           start_rank: currentRank, // 최초 생성 시에만 기록 (불변)
           created_at: now,
@@ -179,30 +185,35 @@ export async function saveRankToSlotNaver(
     const startRankDiff =
       startRank !== null && currentRank !== -1 ? currentRank - startRank : null;
 
-    const { error: historyError } = await supabase
-      .from('slot_rank_naver_history')
-      .insert({
-        slot_status_id: slotRecord.id, // slot_naver의 id 참조
-        keyword: keyword.keyword,
-        link_url: keyword.link_url,
-        current_rank: currentRank,
-        start_rank: startRank, // 불변값 참조 (정규화됨, null이면 currentRank 사용)
-        previous_rank: previousRank, // 직전 순위 (정규화됨)
-        rank_change: rankChange, // 순위 변화량 (양수=하락, 음수=상승)
-        rank_diff: rankChange, // rank_change와 동일
-        start_rank_diff: startRankDiff, // 시작 순위 대비 변화
-        slot_sequence: toNumber(keyword.slot_sequence), // 정규화
-        slot_type: keyword.slot_type || '네이버쇼핑',
-        customer_id: keyword.customer_id || 'master',
-        rank_date: now, // 순위 체크 날짜
-        created_at: now,
-      });
+    // 히스토리 저장 조건부 처리
+    if (shouldSaveHistory) {
+      const { error: historyError } = await supabase
+        .from('slot_rank_naver_history')
+        .insert({
+          slot_status_id: slotRecord.id, // slot_naver의 id 참조
+          keyword: keyword.keyword,
+          link_url: keyword.link_url,
+          current_rank: currentRank,
+          start_rank: startRank, // 불변값 참조 (정규화됨, null이면 currentRank 사용)
+          previous_rank: previousRank, // 직전 순위 (정규화됨)
+          rank_change: rankChange, // 순위 변화량 (양수=하락, 음수=상승)
+          rank_diff: rankChange, // rank_change와 동일
+          start_rank_diff: startRankDiff, // 시작 순위 대비 변화
+          slot_sequence: toNumber(keyword.slot_sequence), // 정규화
+          slot_type: keyword.slot_type || '네이버쇼핑',
+          customer_id: keyword.customer_id || 'master',
+          rank_date: now, // 순위 체크 날짜
+          created_at: now,
+        });
 
-    if (historyError) {
-      // 히스토리 저장 실패는 경고만 (메인 데이터는 이미 저장됨)
-      console.warn(`   ⚠️ 히스토리 저장 실패: ${historyError.message}`);
+      if (historyError) {
+        // 히스토리 저장 실패는 경고만 (메인 데이터는 이미 저장됨)
+        console.warn(`   ⚠️ 히스토리 저장 실패: ${historyError.message}`);
+      } else {
+        console.log(`   📊 히스토리 추가 완료`);
+      }
     } else {
-      console.log(`   📊 히스토리 추가 완료`);
+      console.log(`   ⏭️ -1 순위 → 히스토리 저장 스킵`);
     }
 
     return {

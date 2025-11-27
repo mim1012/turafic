@@ -50,7 +50,7 @@ echo Log: batch-scripts\logs\%LOG_FILE%
 echo ================================
 echo.
 
-call npx tsx rank-check/batch/check-batch-keywords.ts %* 2>&1 | tee batch-scripts\logs\%LOG_FILE%
+call npx tsx rank-check/batch/check-batch-keywords.ts %* 2>&1
 
 set EXIT_CODE=%errorlevel%
 
