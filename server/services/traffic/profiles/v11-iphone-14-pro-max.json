@@ -1,0 +1,27 @@
+{
+  "version": "v11",
+  "deviceName": "iPhone 14 Pro Max",
+  "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
+  "viewport": {
+    "width": 430,
+    "height": 932,
+    "deviceScaleFactor": 3
+  },
+  "platform": "iPhone",
+  "webgl": {
+    "vendor": "Apple Inc.",
+    "renderer": "Apple A16 GPU"
+  },
+  "deviceMemory": 6,
+  "hardwareConcurrency": 6,
+  "maxTouchPoints": 5,
+  "headers": {
+    "accept-language": "ko-KR,ko;q=0.9",
+    "sec-ch-ua": "\"Not A(Brand\";v=\"99\", \"Safari\";v=\"16\"",
+    "sec-ch-ua-mobile": "?1",
+    "sec-ch-ua-platform": "\"iOS\""
+  },
+  "timezone": "Asia/Seoul",
+  "languages": ["ko-KR", "ko"],
+  "colorDepth": 32
+}

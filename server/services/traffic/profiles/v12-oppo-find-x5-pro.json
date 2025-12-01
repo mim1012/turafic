@@ -1,0 +1,27 @@
+{
+  "version": "v12",
+  "deviceName": "OPPO Find X5 Pro",
+  "userAgent": "Mozilla/5.0 (Linux; Android 13; PFEM10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
+  "viewport": {
+    "width": 412,
+    "height": 919,
+    "deviceScaleFactor": 3.5
+  },
+  "platform": "Linux armv8l",
+  "webgl": {
+    "vendor": "Qualcomm",
+    "renderer": "Adreno (TM) 730"
+  },
+  "deviceMemory": 12,
+  "hardwareConcurrency": 8,
+  "maxTouchPoints": 10,
+  "headers": {
+    "accept-language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+    "sec-ch-ua": "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"",
+    "sec-ch-ua-mobile": "?1",
+    "sec-ch-ua-platform": "\"Android\""
+  },
+  "timezone": "Asia/Seoul",
+  "languages": ["ko-KR", "ko", "en-US", "en"],
+  "colorDepth": 24
+}
