@@ -5,6 +5,7 @@ import { connect } from "puppeteer-real-browser";
 import type { Browser, Page } from "puppeteer-core";
 import { findAccurateRank, type RankResult } from '../../../../rank-check/accurate-rank-checker';
 import { ProfileApplier } from '../shared/fingerprint/ProfileApplier';
+import { getFailureLogger, type FailReason } from '../../failureLogger';
 import v7Profile from '../profiles/v7-samsung-s23.json';
 import type { FingerprintProfile } from '../shared/fingerprint/types';
 
@@ -12,6 +13,8 @@ export interface SimpleTrafficProduct {
   nvMid: string;
   productName: string;
   keyword: string;
+  taskId?: number;   // 실패 로깅용
+  slotId?: number;   // 실패 로깅용
 }
 
 export interface SimpleTrafficResult {
@@ -22,6 +25,8 @@ export interface SimpleTrafficResult {
   midClicked: boolean;
   error?: string;
   duration?: number;
+  foundMids?: string[];    // 검색 결과에서 발견된 MID 목록
+  foundCount?: number;     // 발견된 총 상품 수
 }
 
 const BRIDGE_PATTERNS = [
@@ -45,20 +50,20 @@ export class TrafficEngineV7Simple {
     const { browser, page } = await connect({
       headless: false,
       turnstile: true,
-      fingerprint: true,
-      args: ProfileApplier.getConnectArgs(profile),
+      // fingerprint: true,  // 모바일 프로필 비활성화 - m.smartstore CAPTCHA 회피
+      // args: ProfileApplier.getConnectArgs(profile),
     });
 
     this.browser = browser as Browser;
     this.page = page as Page;
 
-    // 프로필 적용 (viewport, navigator 속성)
-    await ProfileApplier.apply(this.page as any, profile);
+    // 프로필 적용 비활성화 - 모바일 프로필 때문에 m.smartstore로 리다이렉트되어 CAPTCHA 발생
+    // await ProfileApplier.apply(this.page as any, profile);
 
     this.page.setDefaultTimeout(30000);
     this.page.setDefaultNavigationTimeout(30000);
 
-    console.log(`[v7-simple] Profile applied: ${profile.deviceName}`);
+    console.log(`[v7-simple] No profile applied (PC mode)`);
   }
 
   async close(): Promise<void> {
@@ -123,6 +128,18 @@ export class TrafficEngineV7Simple {
       // 3. CAPTCHA 체크
       const captchaDetected = await this.checkCaptcha();
       if (captchaDetected) {
+        // CAPTCHA 실패 로깅
+        const failureLogger = getFailureLogger();
+        await failureLogger.logCaptcha({
+          taskId: product.taskId,
+          slotId: product.slotId,
+          keyword: product.keyword || product.productName,
+          targetMid: product.nvMid,
+          searchUrl: this.page.url(),
+          engineVersion: 'v7-simple',
+          errorMessage: '통합검색 CAPTCHA 감지',
+        });
+
         return {
           success: false,
           version: "v7-simple",
@@ -159,6 +176,22 @@ export class TrafficEngineV7Simple {
       }
 
       if (!clicked) {
+        // MID 못 찾았을 때 - 검색 결과에서 발견된 MID들 수집
+        const { mids: foundMids, count: foundCount } = await this.collectFoundMids();
+
+        // 실패 로깅 (DB + JSON 파일)
+        const failureLogger = getFailureLogger();
+        await failureLogger.logMidNotFound({
+          taskId: product.taskId,
+          slotId: product.slotId,
+          keyword: product.keyword || product.productName,
+          targetMid: product.nvMid,
+          searchUrl: this.page.url(),
+          foundMids,
+          foundCount,
+          engineVersion: 'v7-simple',
+        });
+
         return {
           success: false,
           version: "v7-simple",
@@ -167,6 +200,8 @@ export class TrafficEngineV7Simple {
           midClicked: false,
           error: `MID ${product.nvMid} not found (both strategies failed)`,
           duration: Date.now() - startTime,
+          foundMids,
+          foundCount,
         };
       }
 
@@ -253,6 +288,18 @@ export class TrafficEngineV7Simple {
 
       // 차단 페이지 체크만 수행 (MID 불일치는 허용)
       if (midVerification.isBlocked) {
+        // 차단 실패 로깅
+        const failureLogger = getFailureLogger();
+        await failureLogger.logBlocked({
+          taskId: product.taskId,
+          slotId: product.slotId,
+          keyword: product.keyword || product.productName,
+          targetMid: product.nvMid,
+          searchUrl: this.page.url(),
+          engineVersion: 'v7-simple',
+          errorMessage: `Blocked after click - ${midVerification.bodyPreview?.substring(0, 100)}`,
+        });
+
         return {
           success: false,
           version: "v7-simple",
@@ -375,13 +422,12 @@ export class TrafficEngineV7Simple {
 
     if (!midLink.found) return false;
 
-    // Bridge URL이면 catalog URL로 우회
+    // Bridge URL이든 직접 링크든 그냥 클릭 (Bridge가 리다이렉트 해줌)
     if (this.isBridgeUrl(midLink.href!)) {
-      console.log(`[v7-simple] Bridge URL 감지, catalog URL로 우회`);
-      return await this.navigateViaCatalogUrl(mid);
+      console.log(`[v7-simple] Bridge URL 감지, 직접 클릭 (리다이렉트 대기)`);
     }
 
-    // 직접 링크면 클릭
+    // 링크 클릭
     await this.page!.evaluate((href: string) => {
       const link = Array.from(document.querySelectorAll("a")).find((a) => a.href === href);
       if (link) (link as HTMLElement).click();
@@ -460,6 +506,56 @@ export class TrafficEngineV7Simple {
 
   private delay(ms: number): Promise<void> {
     return new Promise(r => setTimeout(r, ms));
+  }
+
+  /**
+   * 검색 결과에서 발견된 MID 목록 수집 (실패 분석용)
+   */
+  private async collectFoundMids(): Promise<{ mids: string[]; count: number }> {
+    if (!this.page) return { mids: [], count: 0 };
+
+    try {
+      return await this.page.evaluate(() => {
+        const mids: string[] = [];
+        const links = Array.from(document.querySelectorAll('a'));
+
+        for (const link of links) {
+          const href = link.href || '';
+
+          // products/12345 패턴에서 MID 추출
+          const productMatch = href.match(/products\/(\d+)/);
+          if (productMatch && !mids.includes(productMatch[1])) {
+            mids.push(productMatch[1]);
+          }
+
+          // catalog/12345 패턴에서 MID 추출
+          const catalogMatch = href.match(/catalog\/(\d+)/);
+          if (catalogMatch && !mids.includes(catalogMatch[1])) {
+            mids.push(catalogMatch[1]);
+          }
+
+          // data-nv-mid 속성 체크
+          const dataMid = link.getAttribute('data-nv-mid');
+          if (dataMid && !mids.includes(dataMid)) {
+            mids.push(dataMid);
+          }
+
+          // data-nvmid 속성 체크
+          const dataNvMid = link.getAttribute('data-nvmid');
+          if (dataNvMid && !mids.includes(dataNvMid)) {
+            mids.push(dataNvMid);
+          }
+        }
+
+        return {
+          mids: mids.slice(0, 20),  // 최대 20개
+          count: mids.length,
+        };
+      });
+    } catch (error) {
+      console.error('[v7-simple] collectFoundMids error:', error);
+      return { mids: [], count: 0 };
+    }
   }
 
   /**
