@@ -38,31 +38,68 @@ export async function getCurrentIP(): Promise<string> {
 // ============ 테더링 어댑터 감지 ============
 export async function getTetheringAdapter(): Promise<string | null> {
   try {
-    // Windows 네트워크 어댑터 목록 가져오기
-    const { stdout } = await execAsync("netsh interface show interface", { encoding: "utf8" });
+    // 방법 1: wmic으로 설명(Description) 기반 검색
+    try {
+      const { stdout: wmicOut } = await execAsync(
+        'wmic nic where "NetEnabled=true" get Name,NetConnectionID /format:csv',
+        { encoding: "utf8" }
+      );
 
+      const tetheringKeywords = [
+        "Remote NDIS",
+        "USB 테더링",
+        "USB Tethering",
+        "Android USB",
+        "RNDIS",
+        "iPhone USB",
+        "Apple Mobile Device Ethernet",
+        "SAMSUNG Mobile",
+        "Mobile USB",
+      ];
+
+      const lines = wmicOut.split("\n").filter(l => l.trim());
+      for (const line of lines) {
+        const lowerLine = line.toLowerCase();
+        for (const keyword of tetheringKeywords) {
+          if (lowerLine.includes(keyword.toLowerCase())) {
+            // CSV 형식: Node,Name,NetConnectionID
+            const parts = line.split(",");
+            if (parts.length >= 3) {
+              const adapterName = parts[parts.length - 1].trim();
+              if (adapterName && adapterName !== "NetConnectionID") {
+                console.log(`[IPRotation] 테더링 어댑터 감지 (wmic): ${adapterName}`);
+                return adapterName;
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      // wmic 실패 시 netsh로 fallback
+    }
+
+    // 방법 2: netsh interface show interface (fallback)
+    const { stdout } = await execAsync("netsh interface show interface", { encoding: "utf8" });
     const lines = stdout.split("\n");
 
-    // USB 테더링 관련 어댑터 찾기
-    const tetheringKeywords = [
-      "Remote NDIS",
-      "USB 테더링",
-      "USB Tethering",
-      "Android USB",
-      "RNDIS",
-      "iPhone USB",
-      "Apple Mobile Device Ethernet",
-    ];
-
+    // "이더넷 XX" 형태로 연결된 어댑터 중 기본 이더넷이 아닌 것 찾기
     for (const line of lines) {
-      for (const keyword of tetheringKeywords) {
-        if (line.toLowerCase().includes(keyword.toLowerCase())) {
-          // 어댑터 이름 추출 (마지막 컬럼)
-          const parts = line.trim().split(/\s{2,}/);
-          if (parts.length >= 4) {
-            const adapterName = parts[parts.length - 1];
-            console.log(`[IPRotation] 테더링 어댑터 감지: ${adapterName}`);
-            return adapterName;
+      // 연결됨 상태인 어댑터만
+      if (line.includes("연결됨") || line.includes("Connected")) {
+        const parts = line.trim().split(/\s{2,}/);
+        if (parts.length >= 4) {
+          const adapterName = parts[parts.length - 1];
+          // VMware, Tailscale 등 제외
+          if (adapterName &&
+              !adapterName.includes("VMware") &&
+              !adapterName.includes("Tailscale") &&
+              !adapterName.includes("Loopback")) {
+            // 이더넷 XX 형태 (숫자가 큰 것이 대체로 테더링)
+            const match = adapterName.match(/이더넷\s*(\d+)/);
+            if (match && parseInt(match[1]) > 10) {
+              console.log(`[IPRotation] 테더링 어댑터 추정: ${adapterName}`);
+              return adapterName;
+            }
           }
         }
       }
